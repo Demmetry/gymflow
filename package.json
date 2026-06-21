@@ -2,16 +2,16 @@
   "name": "gymflow",
   "version": "1.0.0",
   "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
-    "db:push": "prisma db push",
-    "db:generate": "prisma generate",
-    "db:studio": "prisma studio",
-    "db:seed": "ts-node prisma/seed.ts"
-  },
+"scripts": {
+  "dev": "next dev",
+  "build": "prisma generate && next build",
+  "start": "next start",
+  "lint": "next lint",
+  "db:push": "prisma db push",
+  "db:generate": "prisma generate",
+  "db:studio": "prisma studio",
+  "db:seed": "ts-node prisma/seed.ts"
+},
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
     "@prisma/client": "^5.16.0",
