@@ -73,10 +73,10 @@ export function sanitizeDates<T extends Record<string, any>>(body: T, dateFields
     if (field in clean) {
       const val = clean[field]
       if (val === '' || val === undefined) {
-        clean[field] = null
+        ;(clean as any)[field] = null
       } else if (typeof val === 'string') {
         const d = new Date(val)
-        clean[field] = isNaN(d.getTime()) ? null : d
+        ;(clean as any)[field] = isNaN(d.getTime()) ? null : d
       }
     }
   }
