@@ -33,7 +33,8 @@ export default function MemberPortal() {
   async function bookClass(classId:string) {
     if(!data) return
     const res = await fetch('/api/portal', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({_type:'book_class',classId,memberId:data.member.id}) })
-    if(res.ok) toast.success('Class booked!') else { const d=await res.json(); toast.error(d.error||'Failed') }
+    if(res.ok) toast.success('Class booked!') 
+      else { const d=await res.json(); toast.error(d.error||'Failed') }
   }
 
   async function addProgress(e:React.FormEvent) {
