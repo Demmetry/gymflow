@@ -33,15 +33,14 @@ export default function MemberPortal() {
   async function bookClass(classId:string) {
     if(!data) return
     const res = await fetch('/api/portal', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({_type:'book_class',classId,memberId:data.member.id}) })
-    if(res.ok) toast.success('Class booked!') 
-      else { const d=await res.json(); toast.error(d.error||'Failed') }
+    if(res.ok) { toast.success('Class booked!') } else { const d=await res.json(); toast.error(d.error||'Failed') }
   }
 
   async function addProgress(e:React.FormEvent) {
     e.preventDefault()
     if(!data) return
     const res = await fetch('/api/portal', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ _type:'add_progress', memberId:data.member.id, weight:+progressForm.weight||null, bodyFat:+progressForm.bodyFat||null, waist:+progressForm.waist||null, notes:progressForm.notes }) })
-    if(res.ok){ toast.success('Progress logged!'); setProgressForm({weight:'',bodyFat:'',waist:'',notes:''}) } else toast.error('Failed')
+    if(res.ok){ toast.success('Progress logged!'); setProgressForm({weight:'',bodyFat:'',waist:'',notes:''}) } else { toast.error('Failed') }
   }
 
   const statusColors: Record<string,string> = {
@@ -219,7 +218,7 @@ export default function MemberPortal() {
         {tab === 'progress' && (
           <div className="space-y-4">
             <form onSubmit={addProgress} className="card space-y-3">
-              <h3 className="text-white font-semibold flex items-center gap-2"><Plus size={16} className="text-lime-400"/>Log Today's Measurements</h3>
+              <h3 className="text-white font-semibold flex items-center gap-2"><Plus size={16} className="text-lime-400"/>Log Today&apos;s Measurements</h3>
               <div className="grid grid-cols-3 gap-3">
                 <div><label className="label text-xs">Weight (kg)</label><input type="number" value={progressForm.weight} onChange={e=>setProgressForm(f=>({...f,weight:e.target.value}))} step={0.1} className="input text-sm py-2" placeholder="75.5"/></div>
                 <div><label className="label text-xs">Body Fat %</label><input type="number" value={progressForm.bodyFat} onChange={e=>setProgressForm(f=>({...f,bodyFat:e.target.value}))} step={0.1} className="input text-sm py-2" placeholder="18.5"/></div>
@@ -260,8 +259,10 @@ export default function MemberPortal() {
               <h3 className="text-white font-semibold mb-2">Your Check-in QR Code</h3>
               <p className="text-dark-400 text-sm mb-6">Show this at the gym entrance</p>
               <div className="inline-block p-4 bg-white rounded-2xl mb-4">
-                <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`gymflow:checkin:${member.id}`)}&bgcolor=ffffff&color=000000`}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+
+                <img                   src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent('gymflow:checkin:'+member.id)+'&bgcolor=ffffff&color=000000'}`}
                   alt="QR Code" width={180} height={180}
                   className="rounded-xl"
                 />

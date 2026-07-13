@@ -55,7 +55,7 @@ export function DashboardPreview() {
             {/* Main content */}
             <div className="flex-1 p-5 overflow-hidden">
               <div className="flex items-center justify-between mb-5">
-                <div><h3 className="font-semibold text-white text-sm">Good morning, Alex 👋</h3><p className="text-dark-400 text-xs">Here's what's happening today</p></div>
+                <div><h3 className="font-semibold text-white text-sm">Good morning, Alex 👋</h3><p className="text-dark-400 text-xs">Here&apos;s what&apos;s happening today</p></div>
                 <div className="flex gap-2">
                   <button className="bg-dark-700 border border-dark-600 text-xs text-white px-3 py-1.5 rounded-lg">This Month</button>
                   <button className="bg-lime-400 text-dark-950 text-xs font-bold px-3 py-1.5 rounded-lg">+ Add Member</button>

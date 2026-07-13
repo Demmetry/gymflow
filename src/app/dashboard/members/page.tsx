@@ -84,12 +84,20 @@ export default function MembersPage() {
   const [actionLoading, setActionLoading] = useState(false)
 
   const [editForm, setEditForm]     = useState<Partial<Member>>({})
+  const [branches, setBranches]     = useState<{id:string;name:string}[]>([])
+
+  useEffect(() => {
+    fetch('/api/branches').then(r=>r.json()).then(d=>{
+      if(Array.isArray(d.branches)) setBranches(d.branches)
+    }).catch(()=>{})
+  }, [])
+
   const [addForm, setAddForm]       = useState({
     firstName: '', lastName: '', email: '', phone: '',
     membershipType: 'MONTHLY',
     startDate: new Date().toISOString().split('T')[0],
     goals: '', notes: '', healthConditions: '',
-    emergencyContact: '', emergencyPhone: '',
+    emergencyContact: '', emergencyPhone: '', branchId: '',
   })
 
   // ── load list ──────────────────────────────────────────────────────────
@@ -181,7 +189,7 @@ export default function MembersPage() {
     if (res.ok) {
       toast.success(`Member added! Expires: ${formatDate(data.endDate)}`)
       setShowAdd(false)
-      setAddForm({ firstName:'', lastName:'', email:'', phone:'', membershipType:'MONTHLY', startDate: new Date().toISOString().split('T')[0], goals:'', notes:'', healthConditions:'', emergencyContact:'', emergencyPhone:'' })
+      setAddForm({ firstName:'', lastName:'', email:'', phone:'', membershipType:'MONTHLY', startDate: new Date().toISOString().split('T')[0], goals:'', notes:'', healthConditions:'', emergencyContact:'', emergencyPhone:'', branchId:'' })
       loadList()
     } else {
       toast.error(data.error || 'Failed to add member')
@@ -460,6 +468,14 @@ export default function MembersPage() {
                               <input value={editForm.emergencyPhone || ''} onChange={e => setEditForm(f => ({ ...f, emergencyPhone: e.target.value }))} className="input py-2 text-sm" />
                             </div>
                           </div>
+                          {branches.length > 0 && (
+                            <div><label className="label text-xs">Branch</label>
+                              <select value={(editForm as any).branchId || ''} onChange={e=>setEditForm(f=>({...f, branchId:e.target.value}))} className="input py-2 text-sm">
+                                <option value="">No branch</option>
+                                {branches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}
+                              </select>
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <div className="space-y-2.5 text-sm">
@@ -734,6 +750,14 @@ export default function MembersPage() {
                     <input value={addForm.emergencyPhone} onChange={e => setAddForm(f => ({ ...f, emergencyPhone: e.target.value }))} className="input" />
                   </div>
                 </div>
+                {branches.length > 0 && (
+                  <div><label className="label">Assign to Branch (optional)</label>
+                    <select value={addForm.branchId} onChange={e=>setAddForm(f=>({...f,branchId:e.target.value}))} className="input">
+                      <option value="">No branch assigned</option>
+                      {branches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}
+                    </select>
+                  </div>
+                )}
                 <div className="flex gap-3 pt-2">
                   <button type="button" onClick={() => setShowAdd(false)} className="btn-ghost flex-1 justify-center">Cancel</button>
                   <button type="submit" className="btn-primary flex-1 justify-center">Add Member</button>

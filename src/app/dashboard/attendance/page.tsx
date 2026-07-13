@@ -1,7 +1,8 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { UserCheck, Search, Users, TrendingUp, AlertCircle, Clock, CheckCircle2, Zap } from 'lucide-react'
+import { UserCheck, Search, Users, TrendingUp, AlertCircle, Clock, CheckCircle2, Zap, QrCode } from 'lucide-react'
+import Link from 'next/link'
 import { getInitials, formatDateTime } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
@@ -56,6 +57,11 @@ export default function AttendancePage() {
           <h1 className="font-display text-4xl tracking-wider text-white">ATTENDANCE</h1>
           <p className="text-dark-300 text-sm mt-1">Manual check-in — click a member to log their visit</p>
         </div>
+        <Link href="/dashboard/attendance/scan"
+          className="flex items-center gap-2 bg-lime-400 hover:bg-lime-300 text-dark-950 font-bold px-5 py-2.5 rounded-xl text-sm transition-all active:scale-95">
+          <QrCode size={16} />
+          Open QR Scanner
+        </Link>
       </div>
 
       {/* Stat cards */}
@@ -131,7 +137,7 @@ export default function AttendancePage() {
 
         {/* Today's log */}
         <div className="card space-y-4">
-          <h2 className="font-display text-xl tracking-wider text-white">TODAY'S LOG</h2>
+          <h2 className="font-display text-xl tracking-wider text-white">TODAY&apos;S LOG</h2>
           <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
             {loading ? (
               [...Array(4)].map((_,i) => <div key={i} className="h-14 skeleton rounded-xl"/>)

@@ -144,7 +144,7 @@ export default function ClassesPage() {
                 <AlertTriangle size={24} className="text-red-400"/>
               </div>
               <h3 className="font-display text-2xl text-white mb-2">DELETE CLASS</h3>
-              <p className="text-white font-semibold mb-1">"{deleteTarget.name}"</p>
+              <p className="text-white font-semibold mb-1">&quot;{deleteTarget.name}&quot;</p>
               <p className="text-dark-400 text-sm mb-6">This will remove the class and all bookings. Cannot be undone.</p>
               <div className="flex gap-3">
                 <button onClick={() => setDeleteTarget(null)} className="btn-ghost flex-1 justify-center">Cancel</button>

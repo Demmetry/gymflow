@@ -30,12 +30,12 @@ export default function PayrollPage() {
     fetch(`/api/payroll?type=payroll&month=${month}&year=${year}`).then(r=>r.json()).then(d=>{ setRuns(Array.isArray(d)?d:[]); setLoading(false) })
   }
 
-  useEffect(()=>{ loadStaff(); loadPayroll() },[month, year])
+  useEffect(()=>{ loadStaff(); loadPayroll() },[month, year]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function addStaff(e:React.FormEvent) {
     e.preventDefault()
     const res = await fetch('/api/payroll', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({...staffForm, _type:'staff'}) })
-    if(res.ok){ toast.success('Staff member added!'); setShowStaffForm(false); loadStaff() } else toast.error('Failed')
+    if(res.ok){ toast.success('Staff member added!'); setShowStaffForm(false); loadStaff() } else { toast.error('Failed') }
   }
 
   async function runPayroll(e:React.FormEvent) {

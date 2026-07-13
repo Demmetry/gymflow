@@ -132,12 +132,21 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ success: true, message: 'Marked as expired.' })
   }
 
-  let updateData: any = { ...body }
+  const updateData: any = {}
+  const allowedFields = ['firstName','lastName','email','phone','goals','notes','healthConditions','emergencyContact','emergencyPhone','branchId']
+  for (const field of allowedFields) {
+    if (body[field] !== undefined) updateData[field] = body[field] ?? null
+  }
+  if (body.membershipType) updateData.membershipType = body.membershipType
+  if (body.membershipStatus) updateData.membershipStatus = body.membershipStatus
   if (body.startDate || body.membershipType) {
     const base = body.startDate ? new Date(body.startDate) : new Date(member.startDate)
+    if (body.startDate) updateData.startDate = base
     updateData.endDate = calcEndDate(base, body.membershipType || member.membershipType)
   }
-  await prisma.member.update({ where: { id }, data: updateData })
+  if (Object.keys(updateData).length > 0) {
+    await prisma.member.update({ where: { id }, data: updateData })
+  }
   return NextResponse.json({ success: true })
 }
 

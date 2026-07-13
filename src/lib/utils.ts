@@ -67,18 +67,24 @@ export const paymentColors: Record<string, string> = {
  * Prevents "Invalid value for argument" crashes from <input type="date"/datetime-local">
  * fields that were left blank (which submit as '').
  */
-export function sanitizeDates<T extends Record<string, any>>(body: T, dateFields: string[]): T {
+export function sanitizeDates<T extends Record<string, any>>(
+  body: T,
+  dateFields: string[]
+): T {
   const clean = { ...body }
+
   for (const field of dateFields) {
     if (field in clean) {
       const val = clean[field]
+
       if (val === '' || val === undefined) {
         ;(clean as any)[field] = null
       } else if (typeof val === 'string') {
         const d = new Date(val)
-        ;(clean as any)[field] = isNaN(d.getTime()) ? null : d
+        ;(clean as any)[field] = Number.isNaN(d.getTime()) ? null : d
       }
     }
   }
+
   return clean
 }

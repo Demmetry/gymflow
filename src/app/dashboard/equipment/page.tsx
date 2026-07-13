@@ -217,7 +217,7 @@ export default function EquipmentPage() {
             <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
               className="bg-dark-800 border border-red-500/30 rounded-2xl p-8 w-full max-w-sm text-center">
               <h3 className="font-display text-2xl text-white mb-2">DELETE EQUIPMENT</h3>
-              <p className="text-white font-semibold mb-4">"{deleteTarget.name}"</p>
+              <p className="text-white font-semibold mb-4">&quot;{deleteTarget.name}&quot;</p>
               <div className="flex gap-3">
                 <button onClick={() => setDeleteTarget(null)} className="btn-ghost flex-1 justify-center">Cancel</button>
                 <button onClick={deleteEquipment} className="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-lg text-sm">Delete</button>

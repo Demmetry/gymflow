@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getSessionAndGym, isAdmin } from '@/lib/getGym'
+import { getSessionAndGym } from '@/lib/getGym'
 
 export async function GET() {
   const result = await getSessionAndGym()

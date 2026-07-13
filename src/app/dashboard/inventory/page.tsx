@@ -39,7 +39,7 @@ export default function InventoryPage() {
   async function addItem(e:React.FormEvent) {
     e.preventDefault()
     const res = await fetch('/api/inventory', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(form) })
-    if(res.ok){ toast.success('Item added!'); setShowForm(false); load() } else toast.error('Failed')
+    if(res.ok){ toast.success('Item added!'); setShowForm(false); load() } else { toast.error('Failed') }
   }
 
   async function checkout() {

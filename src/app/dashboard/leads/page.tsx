@@ -48,7 +48,7 @@ export default function LeadsPage() {
     if (filterStatus !== 'ALL') p.set('status', filterStatus)
     fetch(`/api/leads?${p}`).then(r=>r.json()).then(d=>{ setData(d); setLoading(false) }).catch(()=>setLoading(false))
   }
-  useEffect(()=>{ load() },[search, filterStatus])
+  useEffect(()=>{ load() },[search, filterStatus]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function addLead(e:React.FormEvent) {
     e.preventDefault()

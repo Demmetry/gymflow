@@ -109,6 +109,7 @@ model Member {
   healthConditions String?
   goals       String?
   notes       String?
+  branchId         String?
   freezeStartedAt  DateTime?
   freezeWeeks      Int?      @default(0)
   totalFreezeWeeks Int?      @default(0)
@@ -117,6 +118,7 @@ model Member {
   updatedAt   DateTime @updatedAt
 
   gym          Gym           @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  branch       Branch?       @relation(fields: [branchId], references: [id])
   payments     Payment[]
   classBookings ClassBooking[]
   checkIns     CheckIn[]
@@ -161,11 +163,13 @@ model GymClass {
   recurrenceRule String? // RRULE string
   startTime   DateTime
   endTime     DateTime
+  branchId    String?
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   gym      Gym            @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  branch   Branch?        @relation(fields: [branchId], references: [id])
   trainer  Trainer?       @relation(fields: [trainerId], references: [id])
   bookings ClassBooking[]
 }
@@ -193,6 +197,7 @@ model Payment {
   status      String   @default("PENDING") // PENDING, COMPLETED, FAILED, REFUNDED
   method      String?  // CARD, CASH, BANK_TRANSFER
   description String?
+  branchId      String?
   stripePaymentIntentId String?
   stripeInvoiceId String?
   dueDate     DateTime?
@@ -202,6 +207,7 @@ model Payment {
 
   gym    Gym     @relation(fields: [gymId], references: [id], onDelete: Cascade)
   member Member? @relation(fields: [memberId], references: [id])
+  branch Branch? @relation(fields: [branchId], references: [id])
 }
 
 model CheckIn {
@@ -224,11 +230,13 @@ model Equipment {
   lastMaintenance DateTime?
   nextMaintenance DateTime?
   status       String   @default("OPERATIONAL") // OPERATIONAL, MAINTENANCE, OUT_OF_SERVICE
+  branchId     String?
   notes        String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  gym Gym @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  gym    Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  branch Branch?  @relation(fields: [branchId], references: [id])
 }
 
 model Announcement {
@@ -290,11 +298,13 @@ model Staff {
   salary     Float    @default(0)       // base monthly salary
   salaryType String   @default("MONTHLY") // MONTHLY, HOURLY
   isActive   Boolean  @default(true)
+  branchId   String?
   joinDate   DateTime @default(now())
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
   gym         Gym          @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  branch      Branch?      @relation(fields: [branchId], references: [id])
   payrollRuns PayrollRun[]
 
   @@unique([gymId, email])
@@ -336,7 +346,12 @@ model Branch {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  gym Gym @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  gym       Gym        @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  members   Member[]
+  classes   GymClass[]
+  payments  Payment[]
+  equipment Equipment[]
+  staff     Staff[]
 }
 
 // ─── FEATURE 4: Inventory & Store ─────────────────────────────────────────

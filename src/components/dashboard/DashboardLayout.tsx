@@ -6,7 +6,7 @@ import { signOut, useSession } from 'next-auth/react'
 import {
   Zap, LayoutDashboard, Users, Calendar, CreditCard, BarChart3,
   Settings, LogOut, Menu, X, Bell, UserCheck, Wrench, Target,
-  Package, Building2, DollarSign, ExternalLink, Shield,
+  Package, Building2, DollarSign, ExternalLink, Shield, FileDown,
 } from 'lucide-react'
 import { cn, getInitials } from '@/lib/utils'
 
@@ -47,6 +47,7 @@ const ALL_NAV_GROUPS = [
   {
     label: 'Admin',
     items: [
+      { href: '/dashboard/import-export', icon: FileDown, label: 'Import & Export', adminOnly: true },
       { href: '/dashboard/settings',   icon: Settings,        label: 'Settings',         adminOnly: true  },
     ],
   },
