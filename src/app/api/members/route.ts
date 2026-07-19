@@ -24,6 +24,14 @@ function getPrice(gym: { pricingDaily: number; pricingMonthly: number; pricingQu
   }
 }
 
+async function getGymPricing(gymId: string) {
+  const g = await prisma.gym.findUnique({
+    where: { id: gymId },
+    select: { pricingDaily: true, pricingMonthly: true, pricingQuarterly: true, pricingAnnual: true },
+  })
+  return g || { pricingDaily: 0, pricingMonthly: 0, pricingQuarterly: 0, pricingAnnual: 0 }
+}
+
 function calcAttendance(checkIns: { checkedIn: Date }[], startDate: Date, endDate?: Date | null): number {
   const start = new Date(startDate)
   const end = endDate ? new Date(endDate) : new Date()
@@ -113,7 +121,7 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    const price = getPrice(gym, membershipType)
+    const price = getPrice(await getGymPricing(gym.id), membershipType)
     await prisma.payment.create({
       data: {
         gymId:       gym.id,
@@ -165,7 +173,7 @@ export async function PATCH(req: NextRequest) {
     const newEnd = calcEndDate(newStart, member.membershipType)
     await prisma.member.update({ where: { id }, data: { membershipStatus: 'ACTIVE', startDate: newStart, endDate: newEnd, freezeWeeks: 0, freezeStartedAt: null } })
 
-    const price = getPrice(gym, member.membershipType)
+    const price = getPrice(await getGymPricing(gym.id), member.membershipType)
     await prisma.payment.create({
       data: {
         gymId:       gym.id,
