@@ -65,6 +65,10 @@ model Gym {
   website     String?
   timezone    String   @default("UTC")
   currency    String   @default("USD")
+  pricingDaily     Float    @default(5)
+  pricingMonthly   Float    @default(49)
+  pricingQuarterly Float    @default(120)
+  pricingAnnual    Float    @default(399)
   plan        String   @default("STARTER") // STARTER, PROFESSIONAL, ENTERPRISE
   planStatus  String   @default("ACTIVE")  // ACTIVE, PAST_DUE, CANCELED
   stripeCustomerId     String?
