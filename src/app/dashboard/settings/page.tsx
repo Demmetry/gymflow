@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Settings, User, Users, Plus, Trash2, Eye, EyeOff, X, ShieldCheck, Shield } from 'lucide-react'
+import { Settings, User, Users, Plus, Trash2, Eye, EyeOff, X, ShieldCheck, Shield, DollarSign } from 'lucide-react'
 import { cn, getInitials } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
@@ -16,6 +16,7 @@ export default function SettingsPage() {
 
   const [tab, setTab] = useState<'gym'|'staff'>('gym')
   const [gymData, setGymData] = useState<GymSettings>({ name:'', address:'', phone:'', email:'', currency:'USD', timezone:'UTC' })
+  const [pricing, setPricing] = useState({ pricingDaily:5, pricingMonthly:49, pricingQuarterly:120, pricingAnnual:399 })
   const [staff, setStaff] = useState<StaffAccount[]>([])
   const [saving, setSaving] = useState(false)
   const [showAddStaff, setShowAddStaff] = useState(false)
@@ -24,7 +25,10 @@ export default function SettingsPage() {
 
   useEffect(() => {
     fetch('/api/settings').then(r => r.json()).then(d => {
-      if (d && !d.error) setGymData({ name: d.name||'', address: d.address||'', phone: d.phone||'', email: d.email||'', currency: d.currency||'USD', timezone: d.timezone||'UTC' })
+      if (d && !d.error) {
+        setGymData({ name: d.name||'', address: d.address||'', phone: d.phone||'', email: d.email||'', currency: d.currency||'USD', timezone: d.timezone||'UTC' })
+        setPricing({ pricingDaily: d.pricingDaily||5, pricingMonthly: d.pricingMonthly||49, pricingQuarterly: d.pricingQuarterly||120, pricingAnnual: d.pricingAnnual||399 })
+      }
     }).catch(() => {})
     if (isAdmin) {
       fetch('/api/staff-accounts').then(r => r.json()).then(d => { if (Array.isArray(d)) setStaff(d) }).catch(() => {})
@@ -34,7 +38,7 @@ export default function SettingsPage() {
   async function saveGym(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
-    const res = await fetch('/api/settings', { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify(gymData) })
+    const res = await fetch('/api/settings', { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({...gymData, ...pricing}) })
     setSaving(false)
     if (res.ok) { toast.success('Settings saved!') } else { toast.error('Failed to save') }
   }
@@ -112,6 +116,18 @@ export default function SettingsPage() {
               </select>
             </div>
           </div>
+
+          <div className="border-t border-dark-700 pt-5">
+            <h2 className="font-semibold text-white flex items-center gap-2 mb-1"><DollarSign size={16} className="text-lime-400"/> Membership Pricing</h2>
+            <p className="text-dark-400 text-xs mb-4">Charged automatically when a member is added or renews.</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div><label className="label">Daily ({gymData.currency})</label><input type="number" min="0" step="0.01" value={pricing.pricingDaily} onChange={e=>setPricing(p=>({...p,pricingDaily:Number(e.target.value)||0}))} className="input"/></div>
+              <div><label className="label">Monthly ({gymData.currency})</label><input type="number" min="0" step="0.01" value={pricing.pricingMonthly} onChange={e=>setPricing(p=>({...p,pricingMonthly:Number(e.target.value)||0}))} className="input"/></div>
+              <div><label className="label">Quarterly ({gymData.currency})</label><input type="number" min="0" step="0.01" value={pricing.pricingQuarterly} onChange={e=>setPricing(p=>({...p,pricingQuarterly:Number(e.target.value)||0}))} className="input"/></div>
+              <div><label className="label">Annual ({gymData.currency})</label><input type="number" min="0" step="0.01" value={pricing.pricingAnnual} onChange={e=>setPricing(p=>({...p,pricingAnnual:Number(e.target.value)||0}))} className="input"/></div>
+            </div>
+          </div>
+
           <button type="submit" disabled={saving} className="btn-primary disabled:opacity-50">
             {saving ? 'Saving…' : 'Save Changes'}
           </button>
