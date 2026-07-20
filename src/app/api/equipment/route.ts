@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { getSessionAndGym } from '@/lib/getGym'
 
@@ -7,6 +8,30 @@ function toDate(val: unknown): Date | null {
   const d = new Date(val as string)
   return isNaN(d.getTime()) ? null : d
 }
+
+const createEquipmentSchema = z.object({
+  name:            z.string().trim().min(1, 'Name is required').max(100),
+  category:        z.string().trim().max(50).optional().nullable(),
+  brand:           z.string().trim().max(50).optional().nullable(),
+  serialNumber:    z.string().trim().max(100).optional().nullable(),
+  status:          z.string().trim().max(30).optional(),
+  notes:           z.string().trim().max(1000).optional().nullable(),
+  purchaseDate:    z.string().optional().nullable(),
+  lastMaintenance: z.string().optional().nullable(),
+  nextMaintenance: z.string().optional().nullable(),
+})
+
+const updateEquipmentSchema = z.object({
+  name:            z.string().trim().min(1).max(100).optional(),
+  category:        z.string().trim().max(50).optional().nullable(),
+  brand:           z.string().trim().max(50).optional().nullable(),
+  serialNumber:    z.string().trim().max(100).optional().nullable(),
+  status:          z.string().trim().max(30).optional(),
+  notes:           z.string().trim().max(1000).optional().nullable(),
+  purchaseDate:    z.string().optional().nullable(),
+  lastMaintenance: z.string().optional().nullable(),
+  nextMaintenance: z.string().optional().nullable(),
+})
 
 export async function GET() {
   const result = await getSessionAndGym()
@@ -24,7 +49,9 @@ export async function POST(req: NextRequest) {
   if ('error' in result) return result.error
   const { gym } = result
   try {
-    const body = await req.json()
+    const parsed = createEquipmentSchema.safeParse(await req.json())
+    if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
+    const body = parsed.data
     const item = await prisma.equipment.create({
       data: {
         gymId:           gym.id,
@@ -53,11 +80,19 @@ export async function PATCH(req: NextRequest) {
   const id = new URL(req.url).searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 })
   try {
-    const body = await req.json()
-    const data: any = { ...body }
-    if ('purchaseDate'    in body) data.purchaseDate    = toDate(body.purchaseDate)
-    if ('lastMaintenance' in body) data.lastMaintenance = toDate(body.lastMaintenance)
-    if ('nextMaintenance' in body) data.nextMaintenance = toDate(body.nextMaintenance)
+    const parsed = updateEquipmentSchema.safeParse(await req.json())
+    if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
+    const body = parsed.data
+    const data: any = {}
+    if (body.name            !== undefined) data.name            = body.name
+    if (body.category        !== undefined) data.category        = body.category
+    if (body.brand           !== undefined) data.brand           = body.brand
+    if (body.serialNumber    !== undefined) data.serialNumber    = body.serialNumber
+    if (body.status          !== undefined) data.status          = body.status
+    if (body.notes           !== undefined) data.notes           = body.notes
+    if (body.purchaseDate    !== undefined) data.purchaseDate    = toDate(body.purchaseDate)
+    if (body.lastMaintenance !== undefined) data.lastMaintenance = toDate(body.lastMaintenance)
+    if (body.nextMaintenance !== undefined) data.nextMaintenance = toDate(body.nextMaintenance)
     await prisma.equipment.updateMany({ where: { id, gymId: gym.id }, data })
     return NextResponse.json({ success: true })
   } catch (err: any) {

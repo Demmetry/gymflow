@@ -17,7 +17,22 @@ export default function LoginPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
-    const result = await signIn('credentials', { email, password, redirect: false })
+
+    const normalizedEmail = email.toLowerCase().trim()
+    const status: any = await fetch('/api/auth/login-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: normalizedEmail }),
+    }).then(r => r.ok ? r.json() : {})
+
+    if (status?.blocked) {
+      setLoading(false)
+      const minutes = Math.ceil((status.retryAfterSeconds || 60) / 60)
+      toast.error(`Too many failed attempts. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`)
+      return
+    }
+
+    const result = await signIn('credentials', { email: normalizedEmail, password, redirect: false })
     setLoading(false)
     if (result?.error) toast.error('Invalid email or password')
     else { toast.success('Welcome back!'); router.push('/dashboard') }
@@ -46,7 +61,10 @@ export default function LoginPage() {
               </div>
             </div>
             <div>
-              <label className="label">Password</label>
+              <div className="flex items-center justify-between">
+                <label className="label">Password</label>
+                <Link href="/auth/forgot-password" className="text-xs text-dark-400 hover:text-lime-400 transition-colors">Forgot password?</Link>
+              </div>
               <div className="relative">
                 <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-dark-400" />
                 <input type={showPass ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required className="input pl-10 pr-10" />

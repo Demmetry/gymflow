@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { getSessionAndGym } from '@/lib/getGym'
 
@@ -7,6 +8,38 @@ function toDate(val: unknown): Date | null {
   const d = new Date(val as string)
   return isNaN(d.getTime()) ? null : d
 }
+
+const createLeadSchema = z.object({
+  firstName:  z.string().trim().min(1, 'First name is required').max(100),
+  lastName:   z.string().trim().min(1, 'Last name is required').max(100),
+  email:      z.string().trim().email().optional().nullable().or(z.literal('')),
+  phone:      z.string().trim().max(30).optional().nullable(),
+  source:     z.string().trim().max(30).optional(),
+  status:     z.string().trim().max(30).optional(),
+  assignedTo: z.string().trim().max(100).optional().nullable(),
+  notes:      z.string().trim().max(2000).optional().nullable(),
+  trialStart:  z.string().optional().nullable(),
+  trialEnd:    z.string().optional().nullable(),
+  followUpAt:  z.string().optional().nullable(),
+  convertedAt: z.string().optional().nullable(),
+})
+
+const updateLeadSchema = z.object({
+  firstName:  z.string().trim().min(1).max(100).optional(),
+  lastName:   z.string().trim().min(1).max(100).optional(),
+  email:      z.string().trim().email().optional().nullable().or(z.literal('')),
+  phone:      z.string().trim().max(30).optional().nullable(),
+  source:     z.string().trim().max(30).optional(),
+  status:     z.string().trim().max(30).optional(),
+  assignedTo: z.string().trim().max(100).optional().nullable(),
+  notes:      z.string().trim().max(2000).optional().nullable(),
+  trialStart:  z.string().optional().nullable(),
+  trialEnd:    z.string().optional().nullable(),
+  followUpAt:  z.string().optional().nullable(),
+  convertedAt: z.string().optional().nullable(),
+  interactionNote: z.string().trim().max(1000).optional(),
+  interactionType: z.string().trim().max(30).optional(),
+})
 
 export async function GET(req: NextRequest) {
   const result = await getSessionAndGym()
@@ -49,7 +82,9 @@ export async function POST(req: NextRequest) {
   if ('error' in result) return result.error
   const { gym } = result
   try {
-    const body = await req.json()
+    const parsed = createLeadSchema.safeParse(await req.json())
+    if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
+    const body = parsed.data
     const lead = await prisma.lead.create({
       data: {
         gymId:      gym.id,
@@ -81,19 +116,30 @@ export async function PATCH(req: NextRequest) {
   const id = new URL(req.url).searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 })
   try {
-    const body = await req.json()
+    const parsed = updateLeadSchema.safeParse(await req.json())
+    if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
+    const body = parsed.data
+
     if (body.interactionNote) {
       await prisma.leadInteraction.create({
         data: { leadId: id, type: body.interactionType || 'NOTE', note: body.interactionNote },
       })
-      delete body.interactionNote
-      delete body.interactionType
     }
-    const updateData: any = { ...body }
-    if ('trialStart'  in body) updateData.trialStart  = toDate(body.trialStart)
-    if ('trialEnd'    in body) updateData.trialEnd    = toDate(body.trialEnd)
-    if ('followUpAt'  in body) updateData.followUpAt  = toDate(body.followUpAt)
-    if ('convertedAt' in body) updateData.convertedAt = toDate(body.convertedAt)
+
+    const updateData: any = {}
+    if (body.firstName  !== undefined) updateData.firstName  = body.firstName
+    if (body.lastName   !== undefined) updateData.lastName   = body.lastName
+    if (body.email      !== undefined) updateData.email      = body.email
+    if (body.phone      !== undefined) updateData.phone      = body.phone
+    if (body.source     !== undefined) updateData.source     = body.source
+    if (body.status     !== undefined) updateData.status     = body.status
+    if (body.assignedTo !== undefined) updateData.assignedTo = body.assignedTo
+    if (body.notes      !== undefined) updateData.notes      = body.notes
+    if (body.trialStart  !== undefined) updateData.trialStart  = toDate(body.trialStart)
+    if (body.trialEnd    !== undefined) updateData.trialEnd    = toDate(body.trialEnd)
+    if (body.followUpAt  !== undefined) updateData.followUpAt  = toDate(body.followUpAt)
+    if (body.convertedAt !== undefined) updateData.convertedAt = toDate(body.convertedAt)
+
     if (Object.keys(updateData).length > 0) {
       await prisma.lead.updateMany({ where: { id, gymId: gym.id }, data: updateData })
     }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { getSessionAndGym } from '@/lib/getGym'
 
@@ -7,6 +8,19 @@ function toDate(val: unknown): Date | null {
   const d = new Date(val as string)
   return isNaN(d.getTime()) ? null : d
 }
+
+const createClassSchema = z.object({
+  name:        z.string().trim().min(1, 'Name is required').max(100),
+  description: z.string().trim().max(1000).optional().nullable(),
+  category:    z.string().trim().max(50).optional().nullable(),
+  duration:    z.coerce.number().int().min(1).max(600).optional(),
+  capacity:    z.coerce.number().int().min(1).max(500).optional(),
+  color:       z.string().trim().max(20).optional(),
+  location:    z.string().trim().max(100).optional().nullable(),
+  trainerId:   z.string().optional().nullable(),
+  startTime:   z.string().min(1, 'Start time is required'),
+  endTime:     z.string().min(1, 'End time is required'),
+})
 
 export async function GET() {
   const result = await getSessionAndGym()
@@ -25,7 +39,9 @@ export async function POST(req: NextRequest) {
   if ('error' in result) return result.error
   const { gym } = result
   try {
-    const body = await req.json()
+    const parsed = createClassSchema.safeParse(await req.json())
+    if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
+    const body = parsed.data
     const startTime = toDate(body.startTime)
     const endTime   = toDate(body.endTime)
     if (!startTime) return NextResponse.json({ error: 'Valid start time is required' }, { status: 400 })
@@ -36,8 +52,8 @@ export async function POST(req: NextRequest) {
         name:        body.name,
         description: body.description || null,
         category:    body.category    || null,
-        duration:    Number(body.duration)  || 60,
-        capacity:    Number(body.capacity)  || 20,
+        duration:    body.duration    || 60,
+        capacity:    body.capacity    || 20,
         color:       body.color       || '#b5ff47',
         location:    body.location    || null,
         trainerId:   body.trainerId   || null,

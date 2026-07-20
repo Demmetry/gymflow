@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { getSessionAndGym } from '@/lib/getGym'
+
+const checkInSchema = z.object({
+  memberId: z.string().min(1, 'memberId is required'),
+  method: z.enum(['MANUAL', 'QR']).optional(),
+})
 
 
 // GET: list today's check-ins + members for manual check-in
@@ -64,8 +70,9 @@ export async function POST(req: NextRequest) {
   if ('error' in result) return result.error
   const { gym } = result
 
-  const { memberId, method = 'MANUAL' } = await req.json()
-  if (!memberId) return NextResponse.json({ error: 'memberId required' }, { status: 400 })
+  const parsed = checkInSchema.safeParse(await req.json())
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
+  const { memberId, method = 'MANUAL' } = parsed.data
 
   // Verify member belongs to this gym
   const member = await prisma.member.findFirst({ where: { id: memberId, gymId: gym.id } })

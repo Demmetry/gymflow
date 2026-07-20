@@ -63,6 +63,7 @@ export async function GET(req: NextRequest) {
         checkIns: { orderBy: { checkedIn: 'desc' }, take: 60 },
         payments: { orderBy: { createdAt: 'desc' }, take: 10 },
         classBookings: { include: { class: true }, orderBy: { bookedAt: 'desc' }, take: 5 },
+        workoutPlans: { include: { exercises: { orderBy: { day: 'asc' } } }, orderBy: { createdAt: 'desc' } },
       },
     })
     if (!member) return NextResponse.json({ error: 'Not found' }, { status: 404 })

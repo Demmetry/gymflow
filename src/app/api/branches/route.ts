@@ -1,6 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { getSessionAndGym, isAdmin } from '@/lib/getGym'
+
+const createBranchSchema = z.object({
+  name:    z.string().trim().min(1, 'Name is required').max(100),
+  address: z.string().trim().max(300).optional().nullable(),
+  phone:   z.string().trim().max(30).optional().nullable(),
+  email:   z.string().trim().email().optional().nullable().or(z.literal('')),
+  manager: z.string().trim().max(100).optional().nullable(),
+})
+
+const updateBranchSchema = z.object({
+  name:     z.string().trim().min(1).max(100).optional(),
+  address:  z.string().trim().max(300).optional().nullable(),
+  phone:    z.string().trim().max(30).optional().nullable(),
+  email:    z.string().trim().email().optional().nullable().or(z.literal('')),
+  manager:  z.string().trim().max(100).optional().nullable(),
+  isActive: z.boolean().optional(),
+})
 
 export async function GET(req: NextRequest) {
   const result = await getSessionAndGym()
@@ -91,7 +109,9 @@ export async function POST(req: NextRequest) {
   if ('error' in result) return result.error
   if (!isAdmin(result.session)) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
   const { gym } = result
-  const body = await req.json()
+  const parsed = createBranchSchema.safeParse(await req.json())
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
+  const body = parsed.data
   const branch = await prisma.branch.create({
     data: {
       gymId:   gym.id,
@@ -112,7 +132,9 @@ export async function PATCH(req: NextRequest) {
   const { gym } = result
   const id = new URL(req.url).searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 })
-  const body = await req.json()
+  const parsed = updateBranchSchema.safeParse(await req.json())
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
+  const body = parsed.data
   const upd: any = {}
   if (body.name     !== undefined) upd.name     = body.name
   if (body.address  !== undefined) upd.address  = body.address

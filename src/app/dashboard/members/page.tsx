@@ -20,6 +20,10 @@ interface Member {
   freezeWeeks?: number; freezeStartedAt?: string; totalFreezeWeeks?: number
   goals?: string; notes?: string; healthConditions?: string
   emergencyContact?: string; emergencyPhone?: string
+  workoutPlans?: {
+    id: string; title: string; description?: string; goal?: string; weeks: number; isActive: boolean
+    exercises: { id: string; name: string; sets: number; reps: string; rest: number; day: number; notes?: string }[]
+  }[]
 }
 
 const STATUS_OPTS = ['ALL', 'ACTIVE', 'EXPIRED', 'FROZEN', 'CANCELED']
@@ -85,6 +89,73 @@ export default function MembersPage() {
 
   const [editForm, setEditForm]     = useState<Partial<Member>>({})
   const [branches, setBranches]     = useState<{id:string;name:string}[]>([])
+
+  const [showAddPlan, setShowAddPlan]     = useState(false)
+  const [planForm, setPlanForm]           = useState({ title: '', goal: 'WEIGHT_LOSS', weeks: 4, description: '' })
+  const [addingExerciseTo, setAddingExerciseTo] = useState<string | null>(null)
+  const [exerciseForm, setExerciseForm]   = useState({ name: '', sets: 3, reps: '10-12', rest: 60, day: 1, notes: '' })
+  const [workoutSaving, setWorkoutSaving] = useState(false)
+
+  const GOALS = ['WEIGHT_LOSS', 'MUSCLE_GAIN', 'ENDURANCE', 'FLEXIBILITY']
+  const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+  async function addWorkoutPlan(e: React.FormEvent) {
+    e.preventDefault()
+    if (!selected) return
+    setWorkoutSaving(true)
+    const res = await fetch('/api/workouts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ memberId: selected.id, ...planForm }),
+    })
+    setWorkoutSaving(false)
+    if (res.ok) {
+      toast.success('Workout plan created!')
+      setShowAddPlan(false)
+      setPlanForm({ title: '', goal: 'WEIGHT_LOSS', weeks: 4, description: '' })
+      openMember(selected.id)
+    } else {
+      const d = await res.json()
+      toast.error(d.error || 'Failed to create plan')
+    }
+  }
+
+  async function deleteWorkoutPlan(id: string) {
+    if (!selected) return
+    if (!window.confirm('Delete this workout plan and all its exercises?')) return
+    const res = await fetch(`/api/workouts?id=${id}`, { method: 'DELETE' })
+    if (res.ok) { toast.success('Plan deleted'); openMember(selected.id) }
+    else toast.error('Failed to delete plan')
+  }
+
+  async function addExercise(planId: string, e: React.FormEvent) {
+    e.preventDefault()
+    if (!selected) return
+    setWorkoutSaving(true)
+    const res = await fetch('/api/workouts/exercises', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ planId, ...exerciseForm }),
+    })
+    setWorkoutSaving(false)
+    if (res.ok) {
+      toast.success('Exercise added!')
+      setAddingExerciseTo(null)
+      setExerciseForm({ name: '', sets: 3, reps: '10-12', rest: 60, day: 1, notes: '' })
+      openMember(selected.id)
+    } else {
+      const d = await res.json()
+      toast.error(d.error || 'Failed to add exercise')
+    }
+  }
+
+  async function deleteExercise(id: string) {
+    if (!selected) return
+    const res = await fetch(`/api/workouts/exercises?id=${id}`, { method: 'DELETE' })
+    if (res.ok) { toast.success('Exercise removed'); openMember(selected.id) }
+    else toast.error('Failed to remove exercise')
+  }
+
 
   useEffect(() => {
     fetch('/api/branches').then(r=>r.json()).then(d=>{
@@ -601,6 +672,100 @@ export default function MembersPage() {
                                   : 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20')}>
                                 {p.status}
                               </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── Workout Plans ── */}
+                    {!editing && (
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-dark-500 text-xs uppercase tracking-widest font-mono">Workout Plans</p>
+                          <button onClick={() => setShowAddPlan(v => !v)} className="text-lime-400 text-xs font-semibold flex items-center gap-1 hover:underline">
+                            <Plus size={12} /> Add Plan
+                          </button>
+                        </div>
+
+                        {showAddPlan && (
+                          <form onSubmit={addWorkoutPlan} className="bg-dark-800 border border-dark-700 rounded-xl p-3 space-y-2 mb-3">
+                            <input value={planForm.title} onChange={e=>setPlanForm(f=>({...f,title:e.target.value}))} placeholder="Plan title" required className="input py-2 text-sm" />
+                            <div className="grid grid-cols-2 gap-2">
+                              <select value={planForm.goal} onChange={e=>setPlanForm(f=>({...f,goal:e.target.value}))} className="input py-2 text-sm">
+                                {GOALS.map(g => <option key={g} value={g}>{g.replace('_',' ')}</option>)}
+                              </select>
+                              <input type="number" min="1" value={planForm.weeks} onChange={e=>setPlanForm(f=>({...f,weeks:Number(e.target.value)||4}))} placeholder="Weeks" className="input py-2 text-sm" />
+                            </div>
+                            <textarea value={planForm.description} onChange={e=>setPlanForm(f=>({...f,description:e.target.value}))} placeholder="Description (optional)" className="input py-2 text-sm h-14 resize-none" />
+                            <div className="flex gap-2">
+                              <button type="button" onClick={()=>setShowAddPlan(false)} className="btn-ghost flex-1 justify-center py-2 text-xs">Cancel</button>
+                              <button type="submit" disabled={workoutSaving} className="btn-primary flex-1 justify-center py-2 text-xs disabled:opacity-50">{workoutSaving ? 'Saving…' : 'Create Plan'}</button>
+                            </div>
+                          </form>
+                        )}
+
+                        {(selected.workoutPlans?.length ?? 0) === 0 && !showAddPlan && (
+                          <p className="text-dark-600 text-xs">No workout plans yet.</p>
+                        )}
+
+                        <div className="space-y-3">
+                          {selected.workoutPlans?.map(plan => (
+                            <div key={plan.id} className="bg-dark-800 border border-dark-700 rounded-xl p-3">
+                              <div className="flex items-start justify-between mb-2">
+                                <div>
+                                  <p className="text-white font-semibold text-sm">{plan.title}</p>
+                                  <p className="text-dark-500 text-xs">{plan.goal ? plan.goal.replace('_',' ') : '—'} · {plan.weeks} weeks</p>
+                                </div>
+                                <button onClick={()=>deleteWorkoutPlan(plan.id)} className="text-dark-500 hover:text-red-400 transition-colors">
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+
+                              {plan.exercises.length > 0 && (
+                                <div className="space-y-1 mb-2">
+                                  {DAYS.map((label, i) => {
+                                    const dayNum = i + 1
+                                    const dayExercises = plan.exercises.filter(ex => ex.day === dayNum)
+                                    if (dayExercises.length === 0) return null
+                                    return (
+                                      <div key={dayNum} className="text-xs">
+                                        <span className="text-lime-400 font-semibold">{label}</span>
+                                        {dayExercises.map(ex => (
+                                          <div key={ex.id} className="flex items-center justify-between text-dark-300 pl-3 py-0.5">
+                                            <span>{ex.name} — {ex.sets}×{ex.reps} · {ex.rest}s rest</span>
+                                            <button onClick={()=>deleteExercise(ex.id)} className="text-dark-600 hover:text-red-400">
+                                              <X size={11} />
+                                            </button>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              )}
+
+                              {addingExerciseTo === plan.id ? (
+                                <form onSubmit={(e)=>addExercise(plan.id, e)} className="space-y-2 pt-2 border-t border-dark-700">
+                                  <input value={exerciseForm.name} onChange={e=>setExerciseForm(f=>({...f,name:e.target.value}))} placeholder="Exercise name" required className="input py-1.5 text-xs" />
+                                  <div className="grid grid-cols-4 gap-1.5">
+                                    <select value={exerciseForm.day} onChange={e=>setExerciseForm(f=>({...f,day:Number(e.target.value)}))} className="input py-1.5 text-xs">
+                                      {DAYS.map((d,i)=><option key={d} value={i+1}>{d}</option>)}
+                                    </select>
+                                    <input type="number" min="1" value={exerciseForm.sets} onChange={e=>setExerciseForm(f=>({...f,sets:Number(e.target.value)||3}))} placeholder="Sets" className="input py-1.5 text-xs" />
+                                    <input value={exerciseForm.reps} onChange={e=>setExerciseForm(f=>({...f,reps:e.target.value}))} placeholder="Reps" className="input py-1.5 text-xs" />
+                                    <input type="number" min="0" value={exerciseForm.rest} onChange={e=>setExerciseForm(f=>({...f,rest:Number(e.target.value)||60}))} placeholder="Rest(s)" className="input py-1.5 text-xs" />
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <button type="button" onClick={()=>setAddingExerciseTo(null)} className="btn-ghost flex-1 justify-center py-1.5 text-xs">Cancel</button>
+                                    <button type="submit" disabled={workoutSaving} className="btn-primary flex-1 justify-center py-1.5 text-xs disabled:opacity-50">{workoutSaving?'Adding…':'Add'}</button>
+                                  </div>
+                                </form>
+                              ) : (
+                                <button onClick={()=>setAddingExerciseTo(plan.id)} className="text-lime-400 text-xs font-semibold flex items-center gap-1 hover:underline">
+                                  <Plus size={11} /> Add Exercise
+                                </button>
+                              )}
                             </div>
                           ))}
                         </div>

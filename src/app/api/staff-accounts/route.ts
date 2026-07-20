@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
+import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { getSessionAndGym, isAdmin } from '@/lib/getGym'
+
+const createStaffAccountSchema = z.object({
+  name:     z.string().trim().min(1, 'Name is required').max(100),
+  email:    z.string().trim().toLowerCase().email('Invalid email address'),
+  password: z.string().min(8, 'Password must be at least 8 characters').max(200),
+})
 
 // GET: list all receptionist accounts for this gym
 export async function GET() {
@@ -23,14 +30,14 @@ export async function POST(req: NextRequest) {
   if ('error' in result) return result.error
   if (!isAdmin(result.session)) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
   const { gym } = result
-  const { name, email, password } = await req.json()
-  if (!name || !email || !password) return NextResponse.json({ error: 'All fields required' }, { status: 400 })
-  if (password.length < 8) return NextResponse.json({ error: 'Password must be 8+ characters' }, { status: 400 })
-  const exists = await prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } })
+  const parsed = createStaffAccountSchema.safeParse(await req.json())
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
+  const { name, email: normalizedEmail, password } = parsed.data
+  const exists = await prisma.user.findUnique({ where: { email: normalizedEmail } })
   if (exists) return NextResponse.json({ error: 'Email already in use' }, { status: 409 })
   const hashed = await bcrypt.hash(password, 12)
   const account = await prisma.user.create({
-    data: { name, email: email.toLowerCase().trim(), password: hashed, role: 'RECEPTIONIST', staffGymId: gym.id },
+    data: { name, email: normalizedEmail, password: hashed, role: 'RECEPTIONIST', staffGymId: gym.id },
   })
   return NextResponse.json({ id: account.id, name: account.name, email: account.email, role: account.role })
 }

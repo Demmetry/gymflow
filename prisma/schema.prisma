@@ -18,6 +18,8 @@ model User {
   role          String    @default("ADMIN") // ADMIN, RECEPTIONIST
   staffGymId    String?   // for RECEPTIONIST: which gym they belong to
   emailVerified DateTime?
+  resetToken       String?   @unique
+  resetTokenExpiry DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -410,6 +412,13 @@ model MemberProgress {
   recordedAt  DateTime @default(now())
 
   member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+}
+
+model RateLimitAttempt {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  count       Int      @default(1)
+  windowStart DateTime @default(now())
 }
 
 model WorkoutPlan {

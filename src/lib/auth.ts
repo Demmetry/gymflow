@@ -2,6 +2,7 @@ import { NextAuthOptions } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
+import { checkRateLimit } from '@/lib/rateLimit'
 
 export const authOptions: NextAuthOptions = {
   session: { strategy: 'jwt' },
@@ -19,8 +20,13 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null
+        const normalizedEmail = credentials.email.toLowerCase().trim()
+
+        const rateLimit = await checkRateLimit(`login:${normalizedEmail}`)
+        if (!rateLimit.allowed) return null
+
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email.toLowerCase().trim() },
+          where: { email: normalizedEmail },
         })
         if (!user || !user.password) return null
         const isValid = await bcrypt.compare(credentials.password, user.password)

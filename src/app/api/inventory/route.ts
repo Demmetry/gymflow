@@ -1,6 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { getSessionAndGym } from '@/lib/getGym'
+
+const saleSchema = z.object({
+  _type:    z.literal('sale'),
+  itemId:   z.string().min(1),
+  quantity: z.coerce.number().int().min(1).max(10000).optional(),
+  method:   z.string().trim().max(20).optional(),
+})
+
+const createItemSchema = z.object({
+  name:        z.string().trim().min(1, 'Name is required').max(100),
+  sku:         z.string().trim().max(50).optional().nullable(),
+  category:    z.string().trim().max(50).optional(),
+  costPrice:   z.coerce.number().min(0).optional(),
+  sellPrice:   z.coerce.number().min(0).optional(),
+  stock:       z.coerce.number().int().min(0).optional(),
+  lowStockAt:  z.coerce.number().int().min(0).optional(),
+  barcode:     z.string().trim().max(50).optional().nullable(),
+  description: z.string().trim().max(1000).optional().nullable(),
+})
+
+const updateItemSchema = z.object({
+  name:       z.string().trim().min(1).max(100).optional(),
+  stock:      z.coerce.number().int().min(0).optional(),
+  costPrice:  z.coerce.number().min(0).optional(),
+  sellPrice:  z.coerce.number().min(0).optional(),
+  lowStockAt: z.coerce.number().int().min(0).optional(),
+  status:     z.string().trim().max(30).optional(),
+  isActive:   z.boolean().optional(),
+})
 
 export async function GET(req: NextRequest) {
   const result = await getSessionAndGym()
@@ -37,12 +67,15 @@ export async function POST(req: NextRequest) {
   const result = await getSessionAndGym()
   if ('error' in result) return result.error
   const { gym } = result
-  const body = await req.json()
+  const rawBody = await req.json()
 
-  if (body._type === 'sale') {
+  if (rawBody._type === 'sale') {
+    const parsed = saleSchema.safeParse(rawBody)
+    if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
+    const body = parsed.data
     const item = await prisma.inventoryItem.findFirst({ where: { id: body.itemId, gymId: gym.id } })
     if (!item) return NextResponse.json({ error: 'Item not found' }, { status: 404 })
-    const qty = Number(body.quantity) || 1
+    const qty = body.quantity || 1
     if (item.stock < qty) return NextResponse.json({ error: 'Insufficient stock' }, { status: 400 })
     const sale = await prisma.storeSale.create({
       data: {
@@ -58,6 +91,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(sale)
   }
 
+  const parsed = createItemSchema.safeParse(rawBody)
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
+  const body = parsed.data
+
   try {
     const item = await prisma.inventoryItem.create({
       data: {
@@ -65,10 +102,10 @@ export async function POST(req: NextRequest) {
         name:       body.name,
         sku:        body.sku        || null,
         category:   body.category   || 'OTHER',
-        costPrice:  Number(body.costPrice)  || 0,
-        sellPrice:  Number(body.sellPrice)  || 0,
-        stock:      Number(body.stock)      || 0,
-        lowStockAt: Number(body.lowStockAt) || 5,
+        costPrice:  body.costPrice  || 0,
+        sellPrice:  body.sellPrice  || 0,
+        stock:      body.stock      || 0,
+        lowStockAt: body.lowStockAt || 5,
         barcode:    body.barcode    || null,
         description:body.description|| null,
       },
@@ -85,13 +122,15 @@ export async function PATCH(req: NextRequest) {
   const { gym } = result
   const id = new URL(req.url).searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 })
-  const body = await req.json()
+  const parsed = updateItemSchema.safeParse(await req.json())
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
+  const body = parsed.data
   const data: any = {}
   if (body.name        !== undefined) data.name        = body.name
-  if (body.stock       !== undefined) data.stock       = Number(body.stock)
-  if (body.costPrice   !== undefined) data.costPrice   = Number(body.costPrice)
-  if (body.sellPrice   !== undefined) data.sellPrice   = Number(body.sellPrice)
-  if (body.lowStockAt  !== undefined) data.lowStockAt  = Number(body.lowStockAt)
+  if (body.stock       !== undefined) data.stock       = body.stock
+  if (body.costPrice   !== undefined) data.costPrice   = body.costPrice
+  if (body.sellPrice   !== undefined) data.sellPrice   = body.sellPrice
+  if (body.lowStockAt  !== undefined) data.lowStockAt  = body.lowStockAt
   if (body.status      !== undefined) data.status      = body.status
   if (body.isActive    !== undefined) data.isActive    = body.isActive
   await prisma.inventoryItem.updateMany({ where: { id, gymId: gym.id }, data })
