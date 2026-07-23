@@ -10,7 +10,7 @@ import { formatDate, formatCurrency, membershipColors, getInitials, cn } from '@
 import toast from 'react-hot-toast'
 
 interface Member {
-  id: string
+  id: string; memberNumber: number
   firstName: string; lastName: string; email: string; phone?: string
   membershipType: string; membershipStatus: string
   startDate: string; endDate?: string
@@ -20,6 +20,7 @@ interface Member {
   freezeWeeks?: number; freezeStartedAt?: string; totalFreezeWeeks?: number
   goals?: string; notes?: string; healthConditions?: string
   emergencyContact?: string; emergencyPhone?: string
+  portalPin?: string
   workoutPlans?: {
     id: string; title: string; description?: string; goal?: string; weeks: number; isActive: boolean
     exercises: { id: string; name: string; sets: number; reps: string; rest: number; day: number; notes?: string }[]
@@ -73,6 +74,9 @@ function AttendanceBar({ pct }: { pct: number }) {
 
 export default function MembersPage() {
   const [members, setMembers]       = useState<Member[]>([])
+  const [page, setPage]             = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [total, setTotal]           = useState(0)
   const [loading, setLoading]       = useState(true)
   const [search, setSearch]         = useState('')
   const [statusFilter, setStatus]   = useState('ALL')
@@ -177,12 +181,20 @@ export default function MembersPage() {
     const p = new URLSearchParams()
     if (search) p.set('search', search)
     if (statusFilter !== 'ALL') p.set('status', statusFilter)
+    p.set('page', String(page))
+    p.set('limit', '25')
     fetch(`/api/members?${p}`)
       .then(r => r.json())
-      .then(d => { setMembers(Array.isArray(d) ? d : []); setLoading(false) })
+      .then(d => {
+        setMembers(Array.isArray(d?.members) ? d.members : [])
+        setTotalPages(d?.totalPages || 1)
+        setTotal(d?.total || 0)
+        setLoading(false)
+      })
       .catch(() => setLoading(false))
   }
-  useEffect(() => { loadList() }, [search, statusFilter]) // eslint-disable-line
+  useEffect(() => { loadList() }, [search, statusFilter, page]) // eslint-disable-line
+  useEffect(() => { setPage(1) }, [search, statusFilter])
 
   // ── open member detail ─────────────────────────────────────────────────
   async function openMember(memberId: string) {
@@ -364,7 +376,10 @@ export default function MembersPage() {
                               {getInitials(`${m.firstName} ${m.lastName}`)}
                             </div>
                             <div>
-                              <div className="text-white text-sm font-medium">{m.firstName} {m.lastName}</div>
+                              <div className="text-white text-sm font-medium flex items-center gap-2">
+                                {m.firstName} {m.lastName}
+                                <span className="text-dark-500 text-[10px] font-mono border border-dark-600 rounded px-1.5 py-0.5">#{m.memberNumber}</span>
+                              </div>
                               <div className="text-dark-500 text-xs">{m.email}</div>
                             </div>
                           </div>
@@ -412,6 +427,16 @@ export default function MembersPage() {
             </tbody>
           </table>
         </div>
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between mt-4">
+            <p className="text-dark-500 text-xs">Page {page} of {totalPages} · {total} members total</p>
+            <div className="flex gap-2">
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1} className="btn-ghost text-xs py-1.5 px-3 disabled:opacity-40">Previous</button>
+              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages} className="btn-ghost text-xs py-1.5 px-3 disabled:opacity-40">Next</button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ═══ MEMBER DETAIL SIDE PANEL ═══════════════════════════════════════════ */}
@@ -675,6 +700,23 @@ export default function MembersPage() {
                             </div>
                           ))}
                         </div>
+                      </div>
+                    )}
+
+                    {/* ── Portal Access ── */}
+                    {!editing && (
+                      <div>
+                        <p className="text-dark-500 text-xs uppercase tracking-widest mb-2 font-mono">Portal Access</p>
+                        <div className="flex items-center justify-between bg-dark-800 border border-dark-700 rounded-xl px-3 py-2.5">
+                          <div>
+                            <p className="text-dark-500 text-xs">Member Portal PIN</p>
+                            <p className="text-lime-400 font-mono text-lg font-bold tracking-widest">{selected.portalPin || '——————'}</p>
+                          </div>
+                          <button onClick={() => { if (window.confirm('Generate a new PIN? The old one will stop working immediately.')) doAction('regeneratePin') }} className="btn-ghost text-xs py-1.5 px-3">
+                            Regenerate
+                          </button>
+                        </div>
+                        <p className="text-dark-600 text-xs mt-1.5">Give this PIN to the member along with their email and your gym ID to access the member portal.</p>
                       </div>
                     )}
 

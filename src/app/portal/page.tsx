@@ -13,6 +13,7 @@ export default function MemberPortal() {
   const [step, setStep] = useState<'login'|'portal'>('login')
   const [email, setEmail] = useState('')
   const [gymSlug, setGymSlug] = useState('')
+  const [pin, setPin] = useState('')
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<PortalData | null>(null)
   const [tab, setTab] = useState<'home'|'classes'|'workout'|'progress'|'qr'>('home')
@@ -22,7 +23,7 @@ export default function MemberPortal() {
     e.preventDefault()
     setLoading(true)
     try {
-      const res = await fetch(`/api/portal?email=${encodeURIComponent(email)}&gym=${gymSlug}`)
+      const res = await fetch(`/api/portal?email=${encodeURIComponent(email)}&gym=${encodeURIComponent(gymSlug)}&pin=${encodeURIComponent(pin)}`)
       if(!res.ok){ const d=await res.json(); toast.error(d.error||'Not found'); setLoading(false); return }
       const d = await res.json()
       setData(d); setStep('portal')
@@ -32,14 +33,14 @@ export default function MemberPortal() {
 
   async function bookClass(classId:string) {
     if(!data) return
-    const res = await fetch('/api/portal', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({_type:'book_class',classId,memberId:data.member.id}) })
+    const res = await fetch('/api/portal', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({_type:'book_class',classId,email,gymSlug,pin}) })
     if(res.ok) { toast.success('Class booked!') } else { const d=await res.json(); toast.error(d.error||'Failed') }
   }
 
   async function addProgress(e:React.FormEvent) {
     e.preventDefault()
     if(!data) return
-    const res = await fetch('/api/portal', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ _type:'add_progress', memberId:data.member.id, weight:+progressForm.weight||null, bodyFat:+progressForm.bodyFat||null, waist:+progressForm.waist||null, notes:progressForm.notes }) })
+    const res = await fetch('/api/portal', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ _type:'add_progress', email, gymSlug, pin, weight:+progressForm.weight||null, bodyFat:+progressForm.bodyFat||null, waist:+progressForm.waist||null, notes:progressForm.notes }) })
     if(res.ok){ toast.success('Progress logged!'); setProgressForm({weight:'',bodyFat:'',waist:'',notes:''}) } else { toast.error('Failed') }
   }
 
@@ -69,6 +70,10 @@ export default function MemberPortal() {
           <div>
             <label className="label">Gym ID</label>
             <div className="relative"><Building2 size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-dark-400"/><input value={gymSlug} onChange={e=>setGymSlug(e.target.value)} required className="input pl-9" placeholder="your-gym-name"/></div>
+          </div>
+          <div>
+            <label className="label">PIN</label>
+            <input value={pin} onChange={e=>setPin(e.target.value)} required maxLength={10} className="input font-mono tracking-widest" placeholder="Ask staff for your PIN"/>
           </div>
           <button type="submit" disabled={loading} className="btn-primary w-full justify-center">
             {loading ? 'Finding your account...' : <><span>Access Portal</span><ArrowRight size={16}/></>}

@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { getSessionAndGym } from '@/lib/getGym'
+
+const listQuerySchema = z.object({
+  page:   z.coerce.number().int().min(1).optional().default(1),
+  limit:  z.coerce.number().int().min(1).max(100).optional().default(25),
+  status: z.string().trim().max(30).optional(),
+  search: z.string().trim().max(100).optional(),
+})
 
 function calcEndDate(start: Date, type: string): Date {
   const d = new Date(start)
@@ -53,8 +61,6 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url)
   const id = searchParams.get('id')
-  const status = searchParams.get('status')
-  const search = searchParams.get('search')
 
   if (id) {
     const member = await prisma.member.findFirst({
@@ -71,14 +77,35 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ...member, attendancePct })
   }
 
+  const parsed = listQuerySchema.safeParse({
+    page: searchParams.get('page') || undefined,
+    limit: searchParams.get('limit') || undefined,
+    status: searchParams.get('status') || undefined,
+    search: searchParams.get('search') || undefined,
+  })
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
+  const { page, limit, status, search } = parsed.data
+
+  const where = {
+    gymId: gym.id,
+    ...(status && status !== 'ALL' ? { membershipStatus: status } : {}),
+    ...(search ? {
+      OR: [
+        { firstName: { contains: search } },
+        { lastName: { contains: search } },
+        { email: { contains: search } },
+        ...(Number.isInteger(Number(search)) ? [{ memberNumber: Number(search) }] : []),
+      ],
+    } : {}),
+  }
+
+  const total = await prisma.member.count({ where })
   const members = await prisma.member.findMany({
-    where: {
-      gymId: gym.id,
-      ...(status && status !== 'ALL' ? { membershipStatus: status } : {}),
-      ...(search ? { OR: [{ firstName: { contains: search } }, { lastName: { contains: search } }, { email: { contains: search } }] } : {}),
-    },
+    where,
     include: { checkIns: { orderBy: { checkedIn: 'desc' }, take: 60 } },
     orderBy: { createdAt: 'desc' },
+    skip: (page - 1) * limit,
+    take: limit,
   })
 
   const now = new Date()
@@ -90,7 +117,13 @@ export async function GET(req: NextRequest) {
     return { ...m, attendancePct: calcAttendance(m.checkIns, m.startDate, m.endDate) }
   }))
 
-  return NextResponse.json(membersWithStats)
+  return NextResponse.json({
+    members: membersWithStats,
+    total,
+    page,
+    limit,
+    totalPages: Math.max(1, Math.ceil(total / limit)),
+  })
 }
 
 export async function POST(req: NextRequest) {
@@ -119,6 +152,7 @@ export async function POST(req: NextRequest) {
         notes:            body.notes            || null,
         emergencyContact: body.emergencyContact || null,
         emergencyPhone:   body.emergencyPhone   || null,
+        portalPin:        String(Math.floor(100000 + Math.random() * 900000)),
       },
     })
 
@@ -198,6 +232,11 @@ export async function PATCH(req: NextRequest) {
   if (action === 'expire') {
     await prisma.member.update({ where: { id }, data: { membershipStatus: 'EXPIRED' } })
     return NextResponse.json({ success: true, message: 'Marked as expired.' })
+  }
+  if (action === 'regeneratePin') {
+    const newPin = String(Math.floor(100000 + Math.random() * 900000))
+    await prisma.member.update({ where: { id }, data: { portalPin: newPin } })
+    return NextResponse.json({ success: true, pin: newPin, message: `New PIN: ${newPin}` })
   }
 
   const updateData: any = {}

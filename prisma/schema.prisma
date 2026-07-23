@@ -20,6 +20,8 @@ model User {
   emailVerified DateTime?
   resetToken       String?   @unique
   resetTokenExpiry DateTime?
+  twoFactorSecret  String?
+  twoFactorEnabled Boolean   @default(false)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -98,6 +100,7 @@ model Gym {
 
 model Member {
   id          String   @id @default(cuid())
+  memberNumber Int     @unique @default(autoincrement())
   gymId       String
   firstName   String
   lastName    String
@@ -112,6 +115,7 @@ model Member {
   endDate     DateTime?
   emergencyContact String?
   emergencyPhone   String?
+  portalPin        String?
   healthConditions String?
   goals       String?
   notes       String?

@@ -78,7 +78,9 @@ export default function LoginPage() {
             </button>
           </form>
           <div className="mt-6 pt-6 border-t border-dark-600">
-            <p className="text-center text-xs text-dark-400">Demo: <span className="text-lime-400 font-mono">demo@gymflow.app</span> / <span className="text-lime-400 font-mono">demo123456</span></p>
+            {process.env.NEXT_PUBLIC_SHOW_DEMO_CREDS === 'true' && (
+              <p className="text-center text-xs text-dark-400">Demo: <span className="text-lime-400 font-mono">demo@gymflow.app</span> / <span className="text-lime-400 font-mono">demo123456</span></p>
+            )}
           </div>
         </div>
         <p className="text-center text-sm text-dark-400 mt-6">Don&apos;t have an account? <Link href="/auth/register" className="text-lime-400 hover:underline">Start free trial</Link></p>
