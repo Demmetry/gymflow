@@ -13,7 +13,7 @@ const listQuerySchema = z.object({
 })
 
 const createPaymentSchema = z.object({
-  memberId:    z.string().optional().nullable(),
+  memberId:    z.coerce.number().int().optional().nullable(),
   amount:      z.coerce.number().min(0.01, 'Amount must be greater than 0').max(1000000),
   currency:    z.string().trim().max(10).optional(),
   type:        z.enum(['MEMBERSHIP', 'CLASS', 'PERSONAL_TRAINING', 'PRODUCT']),
@@ -62,7 +62,11 @@ export async function GET(req: NextRequest) {
   const total = await prisma.payment.count({ where })
   const payments = await prisma.payment.findMany({
     where,
-    include: { member: true },
+    select: {
+      id: true, amount: true, originalAmount: true, discountType: true, discountValue: true,
+      type: true, status: true, method: true, createdAt: true,
+      member: { select: { id: true, firstName: true, lastName: true } },
+    },
     orderBy: { createdAt: 'desc' },
     skip: (page - 1) * limit,
     take: limit,
@@ -116,7 +120,7 @@ export async function POST(req: NextRequest) {
       description: body.description || null,
       paidAt:      status === 'COMPLETED' ? new Date() : null,
     },
-    include: { member: true },
+    include: { member: { select: { id: true, firstName: true, lastName: true } } },
   })
   return NextResponse.json(payment)
 }

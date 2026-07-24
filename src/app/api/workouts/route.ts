@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { getSessionAndGym } from '@/lib/getGym'
 
 const createPlanSchema = z.object({
-  memberId:    z.string().min(1),
+  memberId:    z.coerce.number().int().min(1),
   title:       z.string().trim().min(1, 'Title is required').max(100),
   description: z.string().trim().max(2000).optional().nullable(),
   goal:        z.enum(['WEIGHT_LOSS', 'MUSCLE_GAIN', 'ENDURANCE', 'FLEXIBILITY']).optional().nullable(),
@@ -17,8 +17,10 @@ export async function GET(req: NextRequest) {
   const { gym } = result
 
   const { searchParams } = new URL(req.url)
-  const memberId = searchParams.get('memberId')
-  if (!memberId) return NextResponse.json({ error: 'memberId is required' }, { status: 400 })
+  const memberIdParam = searchParams.get('memberId')
+  if (!memberIdParam) return NextResponse.json({ error: 'memberId is required' }, { status: 400 })
+  const memberId = Number(memberIdParam)
+  if (!Number.isInteger(memberId)) return NextResponse.json({ error: 'Invalid memberId' }, { status: 400 })
 
   const plans = await prisma.workoutPlan.findMany({
     where: { memberId, gymId: gym.id },

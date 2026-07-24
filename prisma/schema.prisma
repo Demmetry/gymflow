@@ -69,10 +69,6 @@ model Gym {
   website     String?
   timezone    String   @default("UTC")
   currency    String   @default("USD")
-  pricingDaily     Float    @default(5)
-  pricingMonthly   Float    @default(49)
-  pricingQuarterly Float    @default(120)
-  pricingAnnual    Float    @default(399)
   plan        String   @default("STARTER") // STARTER, PROFESSIONAL, ENTERPRISE
   planStatus  String   @default("ACTIVE")  // ACTIVE, PAST_DUE, CANCELED
   stripeCustomerId     String?
@@ -84,6 +80,7 @@ model Gym {
   owner    User   @relation(fields: [ownerId], references: [id])
 
   members    Member[]
+  membershipPlans MembershipPlan[]
   trainers   Trainer[]
   classes    GymClass[]
   payments   Payment[]
@@ -99,8 +96,7 @@ model Gym {
 }
 
 model Member {
-  id          String   @id @default(cuid())
-  memberNumber Int     @unique @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   gymId       String
   firstName   String
   lastName    String
@@ -111,6 +107,7 @@ model Member {
   photo       String?
   membershipType String  @default("MONTHLY") // MONTHLY, QUARTERLY, ANNUAL, DAILY
   membershipStatus String @default("ACTIVE") // ACTIVE, EXPIRED, FROZEN, CANCELED
+  planId      String?
   startDate   DateTime @default(now())
   endDate     DateTime?
   emergencyContact String?
@@ -129,6 +126,7 @@ model Member {
 
   gym          Gym           @relation(fields: [gymId], references: [id], onDelete: Cascade)
   branch       Branch?       @relation(fields: [branchId], references: [id])
+  plan         MembershipPlan? @relation(fields: [planId], references: [id])
   payments     Payment[]
   classBookings ClassBooking[]
   checkIns     CheckIn[]
@@ -136,6 +134,21 @@ model Member {
   workoutPlans WorkoutPlan[]
 
   @@unique([gymId, email])
+}
+
+model MembershipPlan {
+  id           String   @id @default(cuid())
+  gymId        String
+  name         String
+  price        Float
+  durationDays Int
+  description  String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  gym     Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  members Member[]
 }
 
 model Trainer {
@@ -187,7 +200,7 @@ model GymClass {
 model ClassBooking {
   id        String   @id @default(cuid())
   classId   String
-  memberId  String
+  memberId  Int
   status    String   @default("CONFIRMED") // CONFIRMED, WAITLIST, CANCELED, ATTENDED
   bookedAt  DateTime @default(now())
 
@@ -200,8 +213,11 @@ model ClassBooking {
 model Payment {
   id          String   @id @default(cuid())
   gymId       String
-  memberId    String?
+  memberId    Int?
   amount      Float
+  originalAmount Float?
+  discountType   String? // PERCENT or FLAT
+  discountValue  Float?
   currency    String   @default("USD")
   type        String   // MEMBERSHIP, CLASS, PERSONAL_TRAINING, PRODUCT
   status      String   @default("PENDING") // PENDING, COMPLETED, FAILED, REFUNDED
@@ -222,7 +238,7 @@ model Payment {
 
 model CheckIn {
   id        String   @id @default(cuid())
-  memberId  String
+  memberId  Int
   checkedIn DateTime @default(now())
   method    String   @default("MANUAL") // MANUAL, QR, RFID, FACE
 
@@ -390,7 +406,7 @@ model StoreSale {
   id        String   @id @default(cuid())
   gymId     String
   itemId    String
-  memberId  String?
+  memberId  Int?
   quantity  Int      @default(1)
   unitPrice Float
   total     Float
@@ -405,7 +421,7 @@ model StoreSale {
 
 model MemberProgress {
   id          String   @id @default(cuid())
-  memberId    String
+  memberId    Int
   weight      Float?
   bodyFat     Float?
   chest       Float?
@@ -428,7 +444,7 @@ model RateLimitAttempt {
 model WorkoutPlan {
   id          String   @id @default(cuid())
   gymId       String
-  memberId    String
+  memberId    Int
   trainerId   String?
   title       String
   description String?

@@ -175,7 +175,12 @@ export default function PaymentsPage() {
               <tr key={p.id} className="hover:bg-dark-750 transition-colors">
                 <td className="px-5 py-4 text-white text-sm">{p.member ? `${p.member.firstName} ${p.member.lastName}` : '—'}</td>
                 <td className="px-5 py-4 text-dark-300 text-sm">{p.type}</td>
-                <td className="px-5 py-4 text-lime-400 font-mono text-sm font-bold">{formatCurrency(p.amount)}</td>
+                <td className="px-5 py-4 text-lime-400 font-mono text-sm font-bold">
+                  {formatCurrency(p.amount)}
+                  {p.discountType && p.originalAmount && p.originalAmount !== p.amount && (
+                    <span className="text-dark-500 line-through ml-2 font-normal text-xs">{formatCurrency(p.originalAmount)}</span>
+                  )}
+                </td>
                 <td className="px-5 py-4"><span className={cn('badge', paymentColors[p.status])}>{p.status}</span></td>
                 <td className="px-5 py-4 text-dark-400 text-sm">{formatDate(p.createdAt)}</td>
                 <td className="px-5 py-4">

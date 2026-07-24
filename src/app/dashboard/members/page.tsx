@@ -9,10 +9,13 @@ import {
 import { formatDate, formatCurrency, membershipColors, getInitials, cn } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
+interface Plan { id: string; name: string; price: number; durationDays: number; description?: string; isActive: boolean }
+
 interface Member {
-  id: string; memberNumber: number
+  id: number
   firstName: string; lastName: string; email: string; phone?: string
   membershipType: string; membershipStatus: string
+  planId?: string; plan?: Plan
   startDate: string; endDate?: string
   attendancePct?: number
   checkIns?: { id: string; checkedIn: string; method: string }[]
@@ -28,16 +31,10 @@ interface Member {
 }
 
 const STATUS_OPTS = ['ALL', 'ACTIVE', 'EXPIRED', 'FROZEN', 'CANCELED']
-const MEMBERSHIP_TYPES = ['DAILY', 'MONTHLY', 'QUARTERLY', 'ANNUAL']
 
-function calcPreviewEnd(startDate: string, type: string): string {
+function calcPreviewEnd(startDate: string, durationDays: number): string {
   const d = new Date(startDate)
-  switch (type) {
-    case 'DAILY':     d.setDate(d.getDate() + 1); break
-    case 'MONTHLY':   d.setMonth(d.getMonth() + 1); break
-    case 'QUARTERLY': d.setMonth(d.getMonth() + 3); break
-    case 'ANNUAL':    d.setFullYear(d.getFullYear() + 1); break
-  }
+  d.setDate(d.getDate() + durationDays)
   return d.toDateString()
 }
 
@@ -88,11 +85,15 @@ export default function MembersPage() {
   const [editing, setEditing]       = useState(false)
   const [freezeWeeks, setFreezeWeeks]   = useState(2)
   const [showFreezeModal, setShowFreezeModal] = useState(false)
+  const [showRenewModal, setShowRenewModal] = useState(false)
+  const [renewDiscountType, setRenewDiscountType] = useState<'' | 'PERCENT' | 'FLAT'>('')
+  const [renewDiscountValue, setRenewDiscountValue] = useState('')
   const [saving, setSaving]         = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
 
   const [editForm, setEditForm]     = useState<Partial<Member>>({})
   const [branches, setBranches]     = useState<{id:string;name:string}[]>([])
+  const [plans, setPlans]           = useState<Plan[]>([])
 
   const [showAddPlan, setShowAddPlan]     = useState(false)
   const [planForm, setPlanForm]           = useState({ title: '', goal: 'WEIGHT_LOSS', weeks: 4, description: '' })
@@ -165,11 +166,16 @@ export default function MembersPage() {
     fetch('/api/branches').then(r=>r.json()).then(d=>{
       if(Array.isArray(d.branches)) setBranches(d.branches)
     }).catch(()=>{})
+    fetch('/api/membership-plans').then(r=>r.json()).then(d=>{
+      if(Array.isArray(d)) setPlans(d.filter((p: Plan) => p.isActive))
+    }).catch(()=>{})
   }, [])
 
   const [addForm, setAddForm]       = useState({
     firstName: '', lastName: '', email: '', phone: '',
-    membershipType: 'MONTHLY',
+    planId: '',
+    discountType: '' as '' | 'PERCENT' | 'FLAT',
+    discountValue: '',
     startDate: new Date().toISOString().split('T')[0],
     goals: '', notes: '', healthConditions: '',
     emergencyContact: '', emergencyPhone: '', branchId: '',
@@ -197,7 +203,7 @@ export default function MembersPage() {
   useEffect(() => { setPage(1) }, [search, statusFilter])
 
   // ── open member detail ─────────────────────────────────────────────────
-  async function openMember(memberId: string) {
+  async function openMember(memberId: number) {
     setPanelLoading(true)
     setEditing(false)
     setEditForm({})
@@ -208,7 +214,6 @@ export default function MembersPage() {
       setEditForm({
         firstName: full.firstName, lastName: full.lastName,
         email: full.email, phone: full.phone || '',
-        membershipType: full.membershipType,
         goals: full.goals || '', notes: full.notes || '',
         healthConditions: full.healthConditions || '',
         emergencyContact: full.emergencyContact || '',
@@ -253,6 +258,9 @@ export default function MembersPage() {
     if (res.ok) {
       toast.success(data.message || 'Done!')
       setShowFreezeModal(false)
+      setShowRenewModal(false)
+      setRenewDiscountType('')
+      setRenewDiscountValue('')
       loadList()
       openMember(selected.id)   // re-fetch fresh data
     } else {
@@ -263,16 +271,18 @@ export default function MembersPage() {
   // ── add member ─────────────────────────────────────────────────────────
   async function addMember(e: React.FormEvent) {
     e.preventDefault()
+    const payload: any = { ...addForm }
+    if (!payload.discountType) { delete payload.discountType; delete payload.discountValue }
     const res = await fetch('/api/members', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(addForm),
+      body: JSON.stringify(payload),
     })
     const data = await res.json()
     if (res.ok) {
       toast.success(`Member added! Expires: ${formatDate(data.endDate)}`)
       setShowAdd(false)
-      setAddForm({ firstName:'', lastName:'', email:'', phone:'', membershipType:'MONTHLY', startDate: new Date().toISOString().split('T')[0], goals:'', notes:'', healthConditions:'', emergencyContact:'', emergencyPhone:'', branchId:'' })
+      setAddForm({ firstName:'', lastName:'', email:'', phone:'', planId:'', discountType:'', discountValue:'', startDate: new Date().toISOString().split('T')[0], goals:'', notes:'', healthConditions:'', emergencyContact:'', emergencyPhone:'', branchId:'' })
       loadList()
     } else {
       toast.error(data.error || 'Failed to add member')
@@ -378,7 +388,7 @@ export default function MembersPage() {
                             <div>
                               <div className="text-white text-sm font-medium flex items-center gap-2">
                                 {m.firstName} {m.lastName}
-                                <span className="text-dark-500 text-[10px] font-mono border border-dark-600 rounded px-1.5 py-0.5">#{m.memberNumber}</span>
+                                <span className="text-dark-500 text-[10px] font-mono border border-dark-600 rounded px-1.5 py-0.5">#{m.id}</span>
                               </div>
                               <div className="text-dark-500 text-xs">{m.email}</div>
                             </div>
@@ -541,11 +551,13 @@ export default function MembersPage() {
                           <div><label className="label text-xs">Phone</label>
                             <input value={editForm.phone || ''} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} className="input py-2 text-sm" />
                           </div>
-                          <div><label className="label text-xs">Membership Type</label>
-                            <select value={editForm.membershipType || 'MONTHLY'}
-                              onChange={e => setEditForm(f => ({ ...f, membershipType: e.target.value }))} className="input py-2 text-sm">
-                              {MEMBERSHIP_TYPES.map(t => <option key={t}>{t}</option>)}
+                          <div><label className="label text-xs">Membership Plan</label>
+                            <select value={editForm.planId || selected?.planId || ''}
+                              onChange={e => setEditForm(f => ({ ...f, planId: e.target.value }))} className="input py-2 text-sm">
+                              <option value="">— Keep current —</option>
+                              {plans.map(p => <option key={p.id} value={p.id}>{p.name} — {formatCurrency(p.price)}</option>)}
                             </select>
+                            <p className="text-dark-500 text-[11px] mt-1">Changing the plan recalculates this member's end date from today.</p>
                           </div>
                           <div><label className="label text-xs">Goals</label>
                             <textarea value={editForm.goals || ''} onChange={e => setEditForm(f => ({ ...f, goals: e.target.value }))} className="input py-2 text-sm h-14 resize-none" />
@@ -618,7 +630,7 @@ export default function MembersPage() {
                             </button>
                           )}
                           {/* Renew */}
-                          <button onClick={() => doAction('renew')} disabled={actionLoading}
+                          <button onClick={() => setShowRenewModal(true)} disabled={actionLoading}
                             className="flex items-center justify-center gap-2 py-3 rounded-xl bg-lime-400/10 border border-lime-400/20 text-lime-400 hover:bg-lime-400/20 transition-colors disabled:opacity-50 text-sm font-semibold">
                             <RefreshCw size={16} /> Renew
                           </button>
@@ -892,6 +904,69 @@ export default function MembersPage() {
             </motion.div>
           </div>
         )}
+
+        {showRenewModal && selected && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <motion.div initial={{ scale: 0.92, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.92, opacity: 0 }}
+              className="bg-dark-800 border border-lime-400/30 rounded-2xl p-8 w-full max-w-sm">
+              <div className="text-center mb-6">
+                <div className="w-14 h-14 bg-lime-400/10 border border-lime-400/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <RefreshCw size={26} className="text-lime-400" />
+                </div>
+                <h3 className="font-display text-2xl text-white">RENEW MEMBERSHIP</h3>
+                <p className="text-dark-400 text-sm mt-1">{selected.firstName} {selected.lastName} · {selected.plan?.name || selected.membershipType}</p>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="label">Discount (optional)</label>
+                  <select value={renewDiscountType} onChange={e => setRenewDiscountType(e.target.value as any)} className="input">
+                    <option value="">None — charge full price</option>
+                    <option value="PERCENT">Percent %</option>
+                    <option value="FLAT">Flat amount</option>
+                  </select>
+                </div>
+                {renewDiscountType && (
+                  <div>
+                    <label className="label">{renewDiscountType === 'PERCENT' ? 'Percent off' : 'Amount off'}</label>
+                    <input type="number" min="0" value={renewDiscountValue} onChange={e => setRenewDiscountValue(e.target.value)} className="input" placeholder={renewDiscountType === 'PERCENT' ? 'e.g. 10' : 'e.g. 5.00'} />
+                  </div>
+                )}
+                {selected.plan && (
+                  <div className="bg-dark-700 rounded-xl p-4 text-sm">
+                    {(() => {
+                      const base = selected.plan!.price
+                      const discountNum = Number(renewDiscountValue) || 0
+                      const final = renewDiscountType === 'PERCENT' ? Math.max(0, base - base * discountNum / 100)
+                                  : renewDiscountType === 'FLAT' ? Math.max(0, base - discountNum)
+                                  : base
+                      return (
+                        <div className="flex justify-between">
+                          <span className="text-dark-400">Amount to charge</span>
+                          <span className="text-lime-400 font-bold">{formatCurrency(final)}{final !== base && <span className="text-dark-500 line-through ml-2 font-normal">{formatCurrency(base)}</span>}</span>
+                        </div>
+                      )
+                    })()}
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <button onClick={() => { setShowRenewModal(false); setRenewDiscountType(''); setRenewDiscountValue('') }}
+                    className="btn-ghost flex-1 justify-center">
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => doAction('renew', renewDiscountType ? { discountType: renewDiscountType, discountValue: Number(renewDiscountValue) || 0 } : {})}
+                    disabled={actionLoading}
+                    className="flex-1 flex items-center justify-center gap-2 bg-lime-400 hover:bg-lime-300 text-dark-950 font-bold py-3 px-6 rounded-xl transition-colors disabled:opacity-50 text-sm">
+                    <RefreshCw size={15} />
+                    {actionLoading ? 'Renewing…' : 'Confirm Renew'}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
       </AnimatePresence>
 
       {/* ═══ ADD MEMBER MODAL ═══════════════════════════════════════════════════ */}
@@ -922,9 +997,10 @@ export default function MembersPage() {
                   <input value={addForm.phone} onChange={e => setAddForm(f => ({ ...f, phone: e.target.value }))} className="input" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div><label className="label">Membership Type</label>
-                    <select value={addForm.membershipType} onChange={e => setAddForm(f => ({ ...f, membershipType: e.target.value }))} className="input">
-                      {MEMBERSHIP_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  <div><label className="label">Membership Plan</label>
+                    <select value={addForm.planId} onChange={e => setAddForm(f => ({ ...f, planId: e.target.value }))} required className="input">
+                      <option value="">— Select a plan —</option>
+                      {plans.map(p => <option key={p.id} value={p.id}>{p.name} — {formatCurrency(p.price)}</option>)}
                     </select>
                   </div>
                   <div><label className="label">Start Date</label>
@@ -932,16 +1008,51 @@ export default function MembersPage() {
                   </div>
                 </div>
 
-                {/* Auto end date preview */}
-                <div className="bg-lime-400/5 border border-lime-400/20 rounded-xl p-3 flex items-center gap-3">
-                  <Calendar size={15} className="text-lime-400 flex-shrink-0" />
-                  <div className="text-sm">
-                    <span className="text-dark-400">End date (auto-calculated): </span>
-                    <span className="text-lime-400 font-bold">
-                      {calcPreviewEnd(addForm.startDate, addForm.membershipType)}
-                    </span>
-                  </div>
-                </div>
+                {plans.length === 0 && (
+                  <p className="text-yellow-400 text-xs bg-yellow-400/5 border border-yellow-400/20 rounded-lg p-2.5">
+                    No membership plans yet — add one in Settings before adding members.
+                  </p>
+                )}
+
+                {addForm.planId && (() => {
+                  const selectedPlan = plans.find(p => p.id === addForm.planId)
+                  if (!selectedPlan) return null
+                  const discountNum = Number(addForm.discountValue) || 0
+                  const finalPrice = addForm.discountType === 'PERCENT' ? Math.max(0, selectedPlan.price - selectedPlan.price * discountNum / 100)
+                                    : addForm.discountType === 'FLAT' ? Math.max(0, selectedPlan.price - discountNum)
+                                    : selectedPlan.price
+                  return (
+                    <>
+                      <div className="bg-lime-400/5 border border-lime-400/20 rounded-xl p-3 flex items-center gap-3">
+                        <Calendar size={15} className="text-lime-400 flex-shrink-0" />
+                        <div className="text-sm">
+                          <span className="text-dark-400">End date (auto-calculated): </span>
+                          <span className="text-lime-400 font-bold">{calcPreviewEnd(addForm.startDate, selectedPlan.durationDays)}</span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-3">
+                        <div><label className="label">Discount</label>
+                          <select value={addForm.discountType} onChange={e => setAddForm(f => ({ ...f, discountType: e.target.value as any }))} className="input">
+                            <option value="">None</option>
+                            <option value="PERCENT">Percent %</option>
+                            <option value="FLAT">Flat amount</option>
+                          </select>
+                        </div>
+                        {addForm.discountType && (
+                          <div className="col-span-2"><label className="label">{addForm.discountType === 'PERCENT' ? 'Percent off' : 'Amount off'}</label>
+                            <input type="number" min="0" value={addForm.discountValue} onChange={e => setAddForm(f => ({ ...f, discountValue: e.target.value }))} className="input" placeholder={addForm.discountType === 'PERCENT' ? 'e.g. 10' : 'e.g. 5.00'} />
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="text-sm text-dark-300">
+                        Charge today: <span className="text-white font-bold">{formatCurrency(finalPrice)}</span>
+                        {finalPrice !== selectedPlan.price && <span className="text-dark-500 line-through ml-2">{formatCurrency(selectedPlan.price)}</span>}
+                      </div>
+                    </>
+                  )
+                })()}
 
                 <div><label className="label">Goals (optional)</label>
                   <input value={addForm.goals} onChange={e => setAddForm(f => ({ ...f, goals: e.target.value }))} className="input" placeholder="e.g. Lose weight, build muscle" />

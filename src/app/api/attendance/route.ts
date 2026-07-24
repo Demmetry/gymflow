@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { getSessionAndGym } from '@/lib/getGym'
 
 const checkInSchema = z.object({
-  memberId: z.string().min(1, 'memberId is required'),
+  memberId: z.coerce.number().int().min(1, 'memberId is required'),
   method: z.enum(['MANUAL', 'QR']).optional(),
 })
 
@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
           { firstName: { contains: search } },
           { lastName: { contains: search } },
           { email: { contains: search } },
-          ...(Number.isInteger(Number(search)) ? [{ memberNumber: Number(search) }] : []),
+          ...(Number.isInteger(Number(search)) ? [{ id: Number(search) }] : []),
         ],
       } : {}),
     }
@@ -55,6 +55,7 @@ export async function GET(req: NextRequest) {
     const total = await prisma.member.count({ where })
     const members = await prisma.member.findMany({
       where,
+      select: { id: true, firstName: true, lastName: true, email: true },
       orderBy: [{ firstName: 'asc' }],
       skip: (page - 1) * limit,
       take: limit,
@@ -89,7 +90,10 @@ export async function GET(req: NextRequest) {
   const totalCheckIns = await prisma.checkIn.count({ where: checkInWhere })
   const checkIns = await prisma.checkIn.findMany({
     where: checkInWhere,
-    include: { member: true },
+    select: {
+      id: true, checkedIn: true, method: true,
+      member: { select: { id: true, firstName: true, lastName: true } },
+    },
     orderBy: { checkedIn: 'desc' },
     skip: (page - 1) * limit,
     take: limit,

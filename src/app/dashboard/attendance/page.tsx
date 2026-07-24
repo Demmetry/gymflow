@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { getInitials } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
-interface Member { id: string; memberNumber: number; firstName: string; lastName: string; email: string; membershipStatus: string }
+interface Member { id: number; firstName: string; lastName: string; email: string }
 interface CheckIn { id: string; checkedIn: string; method: string; member: Member }
 interface Stats { checkIns: CheckIn[]; todayCount: number; weeklyCheckIns: number; inactiveCount: number; total: number; page: number; totalPages: number }
 
@@ -16,7 +16,7 @@ export default function AttendancePage() {
   const [memberTotal, setMemberTotal] = useState(0)
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
-  const [checkingIn, setCheckingIn] = useState<string | null>(null)
+  const [checkingIn, setCheckingIn] = useState<number | null>(null)
 
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -136,7 +136,7 @@ export default function AttendancePage() {
                   <div className="flex-1 min-w-0">
                     <div className="text-white text-sm font-medium truncate flex items-center gap-1.5">
                       {m.firstName} {m.lastName}
-                      <span className="text-dark-500 text-[10px] font-mono">#{m.memberNumber}</span>
+                      <span className="text-dark-500 text-[10px] font-mono">#{m.id}</span>
                     </div>
                     <div className="text-dark-400 text-xs truncate">{m.email}</div>
                   </div>

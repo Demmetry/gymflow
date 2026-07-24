@@ -274,7 +274,7 @@ export default function MemberPortal() {
               </div>
               <div className="bg-dark-700 rounded-xl px-4 py-2 inline-block">
                 <p className="text-lime-400 font-mono text-sm">{member.firstName} {member.lastName}</p>
-                <p className="text-dark-500 text-xs font-mono">{member.id.slice(0,16)}...</p>
+                <p className="text-dark-500 text-xs font-mono">Member #{member.id}</p>
               </div>
             </div>
             <div className="border border-dark-600 rounded-xl p-4 text-sm text-dark-400">

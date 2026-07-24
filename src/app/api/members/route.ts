@@ -10,34 +10,39 @@ const listQuerySchema = z.object({
   search: z.string().trim().max(100).optional(),
 })
 
-function calcEndDate(start: Date, type: string): Date {
+const createMemberSchema = z.object({
+  firstName: z.string().trim().min(1, 'First name is required').max(100),
+  lastName:  z.string().trim().min(1, 'Last name is required').max(100),
+  email:     z.string().trim().toLowerCase().email('Invalid email'),
+  phone:     z.string().trim().max(30).optional().nullable(),
+  planId:    z.string().min(1, 'A membership plan is required'),
+  branchId:  z.string().optional().nullable(),
+  goals:     z.string().trim().max(1000).optional().nullable(),
+  healthConditions: z.string().trim().max(1000).optional().nullable(),
+  notes:            z.string().trim().max(1000).optional().nullable(),
+  emergencyContact: z.string().trim().max(100).optional().nullable(),
+  emergencyPhone:   z.string().trim().max(30).optional().nullable(),
+  startDate:        z.string().optional(),
+  discountType:  z.enum(['PERCENT', 'FLAT']).optional().nullable(),
+  discountValue: z.coerce.number().min(0).optional().nullable(),
+})
+
+const renewSchema = z.object({
+  discountType:  z.enum(['PERCENT', 'FLAT']).optional().nullable(),
+  discountValue: z.coerce.number().min(0).optional().nullable(),
+})
+
+function calcEndDateFromDays(start: Date, days: number): Date {
   const d = new Date(start)
-  switch (type) {
-    case 'DAILY':      d.setDate(d.getDate() + 1); break
-    case 'MONTHLY':    d.setMonth(d.getMonth() + 1); break
-    case 'QUARTERLY':  d.setMonth(d.getMonth() + 3); break
-    case 'ANNUAL':     d.setFullYear(d.getFullYear() + 1); break
-    default:           d.setMonth(d.getMonth() + 1)
-  }
+  d.setDate(d.getDate() + days)
   return d
 }
 
-function getPrice(gym: { pricingDaily: number; pricingMonthly: number; pricingQuarterly: number; pricingAnnual: number }, type: string): number {
-  switch (type) {
-    case 'DAILY':      return gym.pricingDaily
-    case 'MONTHLY':    return gym.pricingMonthly
-    case 'QUARTERLY':  return gym.pricingQuarterly
-    case 'ANNUAL':     return gym.pricingAnnual
-    default:           return gym.pricingMonthly
-  }
-}
-
-async function getGymPricing(gymId: string) {
-  const g = await prisma.gym.findUnique({
-    where: { id: gymId },
-    select: { pricingDaily: true, pricingMonthly: true, pricingQuarterly: true, pricingAnnual: true },
-  })
-  return g || { pricingDaily: 0, pricingMonthly: 0, pricingQuarterly: 0, pricingAnnual: 0 }
+function applyDiscount(baseAmount: number, discountType?: string | null, discountValue?: number | null): number {
+  if (!discountType || !discountValue) return baseAmount
+  if (discountType === 'PERCENT') return Math.max(0, Math.round((baseAmount - (baseAmount * discountValue / 100)) * 100) / 100)
+  if (discountType === 'FLAT') return Math.max(0, Math.round((baseAmount - discountValue) * 100) / 100)
+  return baseAmount
 }
 
 function calcAttendance(checkIns: { checkedIn: Date }[], startDate: Date, endDate?: Date | null): number {
@@ -60,12 +65,15 @@ export async function GET(req: NextRequest) {
   const { gym } = result
 
   const { searchParams } = new URL(req.url)
-  const id = searchParams.get('id')
+  const idParam = searchParams.get('id')
 
-  if (id) {
+  if (idParam) {
+    const id = Number(idParam)
+    if (!Number.isInteger(id)) return NextResponse.json({ error: 'Invalid member id' }, { status: 400 })
     const member = await prisma.member.findFirst({
       where: { id, gymId: gym.id },
       include: {
+        plan: true,
         checkIns: { orderBy: { checkedIn: 'desc' }, take: 60 },
         payments: { orderBy: { createdAt: 'desc' }, take: 10 },
         classBookings: { include: { class: true }, orderBy: { bookedAt: 'desc' }, take: 5 },
@@ -86,7 +94,7 @@ export async function GET(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
   const { page, limit, status, search } = parsed.data
 
-  const where = {
+  const where: any = {
     gymId: gym.id,
     ...(status && status !== 'ALL' ? { membershipStatus: status } : {}),
     ...(search ? {
@@ -94,7 +102,7 @@ export async function GET(req: NextRequest) {
         { firstName: { contains: search } },
         { lastName: { contains: search } },
         { email: { contains: search } },
-        ...(Number.isInteger(Number(search)) ? [{ memberNumber: Number(search) }] : []),
+        ...(Number.isInteger(Number(search)) ? [{ id: Number(search) }] : []),
       ],
     } : {}),
   }
@@ -102,7 +110,11 @@ export async function GET(req: NextRequest) {
   const total = await prisma.member.count({ where })
   const members = await prisma.member.findMany({
     where,
-    include: { checkIns: { orderBy: { checkedIn: 'desc' }, take: 60 } },
+    select: {
+      id: true, firstName: true, lastName: true, email: true,
+      membershipType: true, membershipStatus: true, endDate: true, startDate: true,
+      checkIns: { orderBy: { checkedIn: 'desc' }, take: 60, select: { checkedIn: true } },
+    },
     orderBy: { createdAt: 'desc' },
     skip: (page - 1) * limit,
     take: limit,
@@ -114,7 +126,9 @@ export async function GET(req: NextRequest) {
       await prisma.member.update({ where: { id: m.id }, data: { membershipStatus: 'EXPIRED' } })
       m.membershipStatus = 'EXPIRED'
     }
-    return { ...m, attendancePct: calcAttendance(m.checkIns, m.startDate, m.endDate) }
+    const attendancePct = calcAttendance(m.checkIns, m.startDate, m.endDate)
+    const { checkIns, startDate, ...rest } = m
+    return { ...rest, attendancePct }
   }))
 
   return NextResponse.json({
@@ -130,11 +144,18 @@ export async function POST(req: NextRequest) {
   const result = await getSessionAndGym()
   if ('error' in result) return result.error
   const { gym } = result
+
+  const parsed = createMemberSchema.safeParse(await req.json())
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
+  const body = parsed.data
+
+  const plan = await prisma.membershipPlan.findFirst({ where: { id: body.planId, gymId: gym.id, isActive: true } })
+  if (!plan) return NextResponse.json({ error: 'Membership plan not found' }, { status: 404 })
+
   try {
-    const body = await req.json()
     const startDate = body.startDate ? new Date(body.startDate) : new Date()
-    const membershipType = body.membershipType || 'MONTHLY'
-    const endDate = calcEndDate(startDate, membershipType)
+    const endDate = calcEndDateFromDays(startDate, plan.durationDays)
+
     const member = await prisma.member.create({
       data: {
         gymId:            gym.id,
@@ -142,7 +163,8 @@ export async function POST(req: NextRequest) {
         lastName:         body.lastName,
         email:            body.email,
         phone:            body.phone            || null,
-        membershipType,
+        planId:           plan.id,
+        membershipType:   plan.name,
         membershipStatus: 'ACTIVE',
         startDate,
         endDate,
@@ -156,18 +178,21 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    const price = getPrice(await getGymPricing(gym.id), membershipType)
+    const finalAmount = applyDiscount(plan.price, body.discountType, body.discountValue)
     await prisma.payment.create({
       data: {
-        gymId:       gym.id,
-        memberId:    member.id,
-        amount:      price,
-        currency:    gym.currency || 'USD',
-        type:        'MEMBERSHIP',
-        status:      'COMPLETED',
-        method:      'CASH',
-        description: `New membership — ${member.firstName} ${member.lastName} (${membershipType})`,
-        paidAt:      new Date(),
+        gymId:          gym.id,
+        memberId:       member.id,
+        amount:         finalAmount,
+        originalAmount: plan.price,
+        discountType:   body.discountType || null,
+        discountValue:  body.discountValue || null,
+        currency:       gym.currency || 'USD',
+        type:           'MEMBERSHIP',
+        status:         'COMPLETED',
+        method:         'CASH',
+        description:    `New membership — ${member.firstName} ${member.lastName} (${plan.name})`,
+        paidAt:         new Date(),
       },
     })
 
@@ -183,12 +208,16 @@ export async function PATCH(req: NextRequest) {
   const result = await getSessionAndGym()
   if ('error' in result) return result.error
   const { gym } = result
-  const id = new URL(req.url).searchParams.get('id')
-  if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 })
+
+  const idParam = new URL(req.url).searchParams.get('id')
+  const id = Number(idParam)
+  if (!idParam || !Number.isInteger(id)) return NextResponse.json({ error: 'Valid ID required' }, { status: 400 })
+
   const member = await prisma.member.findFirst({ where: { id, gymId: gym.id } })
   if (!member) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  const body = await req.json()
-  const action = body._action; delete body._action
+
+  const rawBody = await req.json()
+  const action = rawBody._action; delete rawBody._action
 
   if (action === 'freeze') {
     const now = new Date()
@@ -204,26 +233,37 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ success: true, message: `Unfrozen! ${daysLeft} days restored. Expires ${newEnd.toDateString()}` })
   }
   if (action === 'renew') {
+    const parsed = renewSchema.safeParse(rawBody)
+    if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
+    const { discountType, discountValue } = parsed.data
+
+    if (!member.planId) return NextResponse.json({ error: 'This member has no membership plan assigned. Edit the member to assign one before renewing.' }, { status: 400 })
+    const plan = await prisma.membershipPlan.findFirst({ where: { id: member.planId, gymId: gym.id } })
+    if (!plan) return NextResponse.json({ error: 'Membership plan not found' }, { status: 404 })
+
     const newStart = new Date()
-    const newEnd = calcEndDate(newStart, member.membershipType)
+    const newEnd = calcEndDateFromDays(newStart, plan.durationDays)
     await prisma.member.update({ where: { id }, data: { membershipStatus: 'ACTIVE', startDate: newStart, endDate: newEnd, freezeWeeks: 0, freezeStartedAt: null } })
 
-    const price = getPrice(await getGymPricing(gym.id), member.membershipType)
+    const finalAmount = applyDiscount(plan.price, discountType, discountValue)
     await prisma.payment.create({
       data: {
-        gymId:       gym.id,
-        memberId:    member.id,
-        amount:      price,
-        currency:    gym.currency || 'USD',
-        type:        'MEMBERSHIP',
-        status:      'COMPLETED',
-        method:      'CASH',
-        description: `Renewal — ${member.firstName} ${member.lastName} (${member.membershipType})`,
-        paidAt:      new Date(),
+        gymId:          gym.id,
+        memberId:       member.id,
+        amount:         finalAmount,
+        originalAmount: plan.price,
+        discountType:   discountType || null,
+        discountValue:  discountValue || null,
+        currency:       gym.currency || 'USD',
+        type:           'MEMBERSHIP',
+        status:         'COMPLETED',
+        method:         'CASH',
+        description:    `Renewal — ${member.firstName} ${member.lastName} (${plan.name})`,
+        paidAt:         new Date(),
       },
     })
 
-    return NextResponse.json({ success: true, message: `Renewed until ${newEnd.toDateString()}`, amountCharged: price })
+    return NextResponse.json({ success: true, message: `Renewed until ${newEnd.toDateString()}`, amountCharged: finalAmount })
   }
   if (action === 'cancel') {
     await prisma.member.update({ where: { id }, data: { membershipStatus: 'CANCELED', freezeStartedAt: null, freezeWeeks: 0 } })
@@ -242,15 +282,22 @@ export async function PATCH(req: NextRequest) {
   const updateData: any = {}
   const allowedFields = ['firstName','lastName','email','phone','goals','notes','healthConditions','emergencyContact','emergencyPhone','branchId']
   for (const field of allowedFields) {
-    if (body[field] !== undefined) updateData[field] = body[field] ?? null
+    if (rawBody[field] !== undefined) updateData[field] = rawBody[field] ?? null
   }
-  if (body.membershipType) updateData.membershipType = body.membershipType
-  if (body.membershipStatus) updateData.membershipStatus = body.membershipStatus
-  if (body.startDate || body.membershipType) {
-    const base = body.startDate ? new Date(body.startDate) : new Date(member.startDate)
-    if (body.startDate) updateData.startDate = base
-    updateData.endDate = calcEndDate(base, body.membershipType || member.membershipType)
+  if (rawBody.membershipStatus) updateData.membershipStatus = rawBody.membershipStatus
+
+  if (rawBody.planId && rawBody.planId !== member.planId) {
+    const newPlan = await prisma.membershipPlan.findFirst({ where: { id: rawBody.planId, gymId: gym.id } })
+    if (!newPlan) return NextResponse.json({ error: 'Membership plan not found' }, { status: 404 })
+    updateData.planId = newPlan.id
+    updateData.membershipType = newPlan.name
+    const base = rawBody.startDate ? new Date(rawBody.startDate) : new Date(member.startDate)
+    updateData.endDate = calcEndDateFromDays(base, newPlan.durationDays)
+    if (rawBody.startDate) updateData.startDate = base
+  } else if (rawBody.startDate) {
+    updateData.startDate = new Date(rawBody.startDate)
   }
+
   if (Object.keys(updateData).length > 0) {
     await prisma.member.update({ where: { id }, data: updateData })
   }
@@ -261,8 +308,11 @@ export async function DELETE(req: NextRequest) {
   const result = await getSessionAndGym()
   if ('error' in result) return result.error
   const { gym } = result
-  const id = new URL(req.url).searchParams.get('id')
-  if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 })
+
+  const idParam = new URL(req.url).searchParams.get('id')
+  const id = Number(idParam)
+  if (!idParam || !Number.isInteger(id)) return NextResponse.json({ error: 'Valid ID required' }, { status: 400 })
+
   const member = await prisma.member.findFirst({ where: { id, gymId: gym.id } })
   if (!member) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   await prisma.member.delete({ where: { id } })
