@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { UserCheck, Search, Users, TrendingUp, AlertCircle, Clock, CheckCircle2, Zap, QrCode } from 'lucide-react'
 import Link from 'next/link'
@@ -17,6 +17,8 @@ export default function AttendancePage() {
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [checkingIn, setCheckingIn] = useState<number | null>(null)
+  const [armedId, setArmedId] = useState<number | null>(null)
+  const armTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -36,6 +38,7 @@ export default function AttendancePage() {
 
   useEffect(() => { loadStats() }, [dateFrom, dateTo, logPage]) // eslint-disable-line
   useEffect(() => { setLogPage(1) }, [dateFrom, dateTo])
+  useEffect(() => { setArmedId(null) }, [search])
 
   // Debounced, server-side member search — doesn't load the whole roster up front
   useEffect(() => {
@@ -64,6 +67,24 @@ export default function AttendancePage() {
     if (res.ok) { toast.success(`${member.firstName} checked in!`); loadStats() }
     else { const d = await res.json(); toast.error(d.error || 'Failed') }
   }
+
+  // First tap arms the row ("tap again to confirm"); second tap within the window actually checks in.
+  // This exists specifically to prevent misclicking the wrong person in a search list, which a single
+  // instant tap makes easy to do — especially with common names.
+  function handleTap(member: Member) {
+    if (checkedInIds.has(member.id)) { toast('Already checked in today', { icon: '✓' }); return }
+    if (armTimeout.current) clearTimeout(armTimeout.current)
+
+    if (armedId === member.id) {
+      setArmedId(null)
+      checkIn(member)
+    } else {
+      setArmedId(member.id)
+      armTimeout.current = setTimeout(() => setArmedId(null), 4000)
+    }
+  }
+
+  useEffect(() => () => { if (armTimeout.current) clearTimeout(armTimeout.current) }, [])
 
   return (
     <div className="p-6 space-y-6">
@@ -118,19 +139,22 @@ export default function AttendancePage() {
             ) : members.map(m => {
               const alreadyIn = checkedInIds.has(m.id)
               const isLoading = checkingIn === m.id
+              const isArmed = armedId === m.id
               return (
                 <motion.button
                   key={m.id}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => checkIn(m)}
+                  onClick={() => handleTap(m)}
                   disabled={isLoading}
                   className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${
                     alreadyIn
                       ? 'bg-lime-400/5 border-lime-400/20 cursor-default'
+                      : isArmed
+                      ? 'bg-orange-400/10 border-orange-400/50 ring-1 ring-orange-400/30'
                       : 'bg-dark-700 border-dark-600 hover:border-lime-400/40 hover:bg-dark-600'
                   }`}
                 >
-                  <div className="w-9 h-9 rounded-full bg-dark-600 border border-dark-500 flex items-center justify-center text-xs font-bold text-lime-400 flex-shrink-0">
+                  <div className={`w-9 h-9 rounded-full border flex items-center justify-center text-xs font-bold flex-shrink-0 transition-colors ${isArmed ? 'bg-orange-400/10 border-orange-400/40 text-orange-400' : 'bg-dark-600 border-dark-500 text-lime-400'}`}>
                     {getInitials(`${m.firstName} ${m.lastName}`)}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -138,12 +162,18 @@ export default function AttendancePage() {
                       {m.firstName} {m.lastName}
                       <span className="text-dark-500 text-[10px] font-mono">#{m.id}</span>
                     </div>
-                    <div className="text-dark-400 text-xs truncate">{m.email}</div>
+                    {isArmed ? (
+                      <div className="text-orange-400 text-xs font-semibold">Tap again to confirm check-in</div>
+                    ) : (
+                      <div className="text-dark-400 text-xs truncate">{m.email}</div>
+                    )}
                   </div>
                   {isLoading ? (
                     <div className="w-5 h-5 border-2 border-lime-400/30 border-t-lime-400 rounded-full animate-spin flex-shrink-0"/>
                   ) : alreadyIn ? (
                     <CheckCircle2 size={18} className="text-lime-400 flex-shrink-0"/>
+                  ) : isArmed ? (
+                    <CheckCircle2 size={16} className="text-orange-400 flex-shrink-0"/>
                   ) : (
                     <Zap size={16} className="text-dark-500 flex-shrink-0"/>
                   )}

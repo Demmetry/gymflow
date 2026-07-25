@@ -38,6 +38,9 @@ export const authOptions: NextAuthOptions = {
           image:      user.image ?? undefined,
           role:       user.role,
           staffGymId: user.staffGymId ?? undefined,
+          branchId:   user.branchId ?? undefined,
+          permissions: user.permissions ?? undefined,
+          isPlatformOwner: user.isPlatformOwner,
         } as any
       },
     }),
@@ -48,6 +51,9 @@ export const authOptions: NextAuthOptions = {
         token.id         = (user as any).id
         token.role       = (user as any).role
         token.staffGymId = (user as any).staffGymId
+        token.branchId   = (user as any).branchId
+        token.permissions = (user as any).permissions
+        token.isPlatformOwner = (user as any).isPlatformOwner
       }
       return token
     },
@@ -56,6 +62,9 @@ export const authOptions: NextAuthOptions = {
         (session.user as any).id         = token.id
         ;(session.user as any).role       = token.role
         ;(session.user as any).staffGymId = token.staffGymId
+        ;(session.user as any).branchId   = token.branchId
+        ;(session.user as any).permissions = token.permissions
+        ;(session.user as any).isPlatformOwner = token.isPlatformOwner
       }
       return session
     },

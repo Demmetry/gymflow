@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { getSessionAndGym } from '@/lib/getGym'
+import { getSessionAndGym, branchScope } from '@/lib/getGym'
 
 const listQuerySchema = z.object({
   page:   z.coerce.number().int().min(1).optional().default(1),
@@ -71,7 +71,7 @@ export async function GET(req: NextRequest) {
     const id = Number(idParam)
     if (!Number.isInteger(id)) return NextResponse.json({ error: 'Invalid member id' }, { status: 400 })
     const member = await prisma.member.findFirst({
-      where: { id, gymId: gym.id },
+      where: { id, gymId: gym.id, ...branchScope(result) },
       include: {
         plan: true,
         checkIns: { orderBy: { checkedIn: 'desc' }, take: 60 },
@@ -96,6 +96,7 @@ export async function GET(req: NextRequest) {
 
   const where: any = {
     gymId: gym.id,
+    ...branchScope(result),
     ...(status && status !== 'ALL' ? { membershipStatus: status } : {}),
     ...(search ? {
       OR: [
@@ -168,7 +169,7 @@ export async function POST(req: NextRequest) {
         membershipStatus: 'ACTIVE',
         startDate,
         endDate,
-        branchId:         body.branchId         || null,
+        branchId:         (result.branchId || body.branchId) || null,
         goals:            body.goals            || null,
         healthConditions: body.healthConditions || null,
         notes:            body.notes            || null,
@@ -213,7 +214,7 @@ export async function PATCH(req: NextRequest) {
   const id = Number(idParam)
   if (!idParam || !Number.isInteger(id)) return NextResponse.json({ error: 'Valid ID required' }, { status: 400 })
 
-  const member = await prisma.member.findFirst({ where: { id, gymId: gym.id } })
+  const member = await prisma.member.findFirst({ where: { id, gymId: gym.id, ...branchScope(result) } })
   if (!member) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const rawBody = await req.json()
@@ -313,7 +314,7 @@ export async function DELETE(req: NextRequest) {
   const id = Number(idParam)
   if (!idParam || !Number.isInteger(id)) return NextResponse.json({ error: 'Valid ID required' }, { status: 400 })
 
-  const member = await prisma.member.findFirst({ where: { id, gymId: gym.id } })
+  const member = await prisma.member.findFirst({ where: { id, gymId: gym.id, ...branchScope(result) } })
   if (!member) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   await prisma.member.delete({ where: { id } })
   return NextResponse.json({ success: true })

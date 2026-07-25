@@ -6,52 +6,54 @@ import { signOut, useSession } from 'next-auth/react'
 import {
   Zap, LayoutDashboard, Users, Calendar, CreditCard, BarChart3,
   Settings, LogOut, Menu, X, Bell, UserCheck, Wrench, Target,
-  Package, Building2, DollarSign, ExternalLink, Shield, FileDown,
+  Package, Building2, DollarSign, ExternalLink, Shield, FileDown, ShieldAlert,
 } from 'lucide-react'
 import { cn, getInitials } from '@/lib/utils'
 
-// adminOnly: true  → hidden from receptionists
-// adminOnly: false → visible to everyone including receptionists
+// key maps to the permission system in src/lib/getGym.ts — admins always see everything;
+// receptionists see whatever's in their custom permissions, or the default set if uncustomized.
 const ALL_NAV_GROUPS = [
   {
     label: 'Main',
     items: [
-      { href: '/dashboard',            icon: LayoutDashboard, label: 'Dashboard',      adminOnly: false },
-      { href: '/dashboard/leads',      icon: Target,          label: 'Leads & CRM',    adminOnly: false }, // receptionists can see leads
-      { href: '/dashboard/members',    icon: Users,           label: 'Members',         adminOnly: false },
-      { href: '/dashboard/attendance', icon: UserCheck,       label: 'Attendance',      adminOnly: false },
+      { href: '/dashboard',            icon: LayoutDashboard, label: 'Dashboard',      key: 'dashboard' },
+      { href: '/dashboard/leads',      icon: Target,          label: 'Leads & CRM',    key: 'leads' },
+      { href: '/dashboard/members',    icon: Users,           label: 'Members',         key: 'members' },
+      { href: '/dashboard/attendance', icon: UserCheck,       label: 'Attendance',      key: 'attendance' },
     ],
   },
   {
     label: 'Classes & Schedule',
     items: [
-      { href: '/dashboard/classes',    icon: Calendar,        label: 'Classes',          adminOnly: false },
+      { href: '/dashboard/classes',    icon: Calendar,        label: 'Classes',          key: 'classes' },
     ],
   },
   {
     label: 'Finance',
     items: [
-      { href: '/dashboard/payments',   icon: CreditCard,      label: 'Payments',         adminOnly: false },
-      { href: '/dashboard/payroll',    icon: DollarSign,      label: 'Payroll',          adminOnly: true  },
-      { href: '/dashboard/inventory',  icon: Package,         label: 'Store & Inventory',adminOnly: false },
+      { href: '/dashboard/payments',   icon: CreditCard,      label: 'Payments',         key: 'payments' },
+      { href: '/dashboard/payroll',    icon: DollarSign,      label: 'Payroll',          key: 'payroll' },
+      { href: '/dashboard/inventory',  icon: Package,         label: 'Store & Inventory',key: 'inventory' },
     ],
   },
   {
     label: 'Operations',
     items: [
-      { href: '/dashboard/equipment',  icon: Wrench,          label: 'Equipment',        adminOnly: false },
-      { href: '/dashboard/branches',   icon: Building2,       label: 'Branches',         adminOnly: true  },
-      { href: '/dashboard/analytics',  icon: BarChart3,       label: 'Analytics',        adminOnly: true  },
+      { href: '/dashboard/equipment',  icon: Wrench,          label: 'Equipment',        key: 'equipment' },
+      { href: '/dashboard/branches',   icon: Building2,       label: 'Branches',         key: 'branches' },
+      { href: '/dashboard/analytics',  icon: BarChart3,       label: 'Analytics',        key: 'analytics' },
     ],
   },
   {
     label: 'Admin',
     items: [
-      { href: '/dashboard/import-export', icon: FileDown, label: 'Import & Export', adminOnly: true },
-      { href: '/dashboard/settings',   icon: Settings,        label: 'Settings',         adminOnly: true  },
+      { href: '/dashboard/import-export', icon: FileDown, label: 'Import & Export', key: 'import-export' },
+      { href: '/dashboard/settings',   icon: Settings,        label: 'Settings',         key: 'settings' },
     ],
   },
 ]
+
+const DEFAULT_RECEPTIONIST_PERMISSIONS = ['dashboard', 'leads', 'members', 'attendance', 'classes', 'payments', 'inventory', 'equipment']
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname    = usePathname()
@@ -60,12 +62,19 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   const role    = (session?.user as any)?.role ?? 'ADMIN'
   const isAdmin = role === 'ADMIN'
+  const isPlatformOwner = !!(session?.user as any)?.isPlatformOwner
+  const userPermissions: string[] | undefined = (() => {
+    const raw = (session?.user as any)?.permissions
+    if (!raw) return undefined
+    try { return JSON.parse(raw) } catch { return undefined }
+  })()
+  const effectivePermissions = userPermissions ?? DEFAULT_RECEPTIONIST_PERMISSIONS
 
-  // Filter groups based on role — receptionists skip adminOnly items
+  // Filter groups based on role/permissions — receptionists only see what they've been granted
   const navGroups = ALL_NAV_GROUPS
     .map(g => ({
       ...g,
-      items: g.items.filter(item => !item.adminOnly || isAdmin),
+      items: g.items.filter(item => isAdmin || effectivePermissions.includes(item.key)),
     }))
     .filter(g => g.items.length > 0)
 
@@ -142,6 +151,15 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 ↗
               </span>
             </a>
+            {isPlatformOwner && (
+              <Link
+                href="/admin"
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-purple-300 hover:text-white hover:bg-purple-500/10 transition-all mt-1"
+              >
+                <ShieldAlert size={16} className="flex-shrink-0" />
+                <span className="flex-1">Platform Admin</span>
+              </Link>
+            )}
           </div>
         </nav>
 

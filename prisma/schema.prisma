@@ -17,6 +17,9 @@ model User {
   image         String?
   role          String    @default("ADMIN") // ADMIN, RECEPTIONIST
   staffGymId    String?   // for RECEPTIONIST: which gym they belong to
+  branchId      String?   // for RECEPTIONIST: which branch they're scoped to (null = all branches)
+  permissions   String?   // for RECEPTIONIST: JSON array of allowed nav keys (null = default set)
+  isPlatformOwner Boolean @default(false) // GymFlow's own owner — separate from any single gym's ADMIN
   emailVerified DateTime?
   resetToken       String?   @unique
   resetTokenExpiry DateTime?
@@ -26,6 +29,7 @@ model User {
   updatedAt     DateTime  @updatedAt
 
   gym       Gym?
+  branch    Branch?   @relation(fields: [branchId], references: [id])
   accounts  Account[]
   sessions  Session[]
 }
@@ -376,6 +380,7 @@ model Branch {
   members   Member[]
   classes   GymClass[]
   payments  Payment[]
+  staffAccounts User[]
   equipment Equipment[]
   staff     Staff[]
 }

@@ -7,8 +7,26 @@ import { cn, getInitials, formatCurrency } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
 interface GymSettings { name: string; address: string; phone: string; email: string; currency: string; timezone: string }
-interface StaffAccount { id: string; name: string; email: string; role: string; createdAt: string }
+interface StaffAccount { id: string; name: string; email: string; role: string; branchId?: string | null; permissions?: string | null; createdAt: string }
 interface Plan { id: string; name: string; price: number; durationDays: number; description?: string; isActive: boolean }
+interface Branch { id: string; name: string }
+
+const PERMISSION_OPTIONS = [
+  { key: 'dashboard',     label: 'Dashboard' },
+  { key: 'leads',         label: 'Leads & CRM' },
+  { key: 'members',       label: 'Members' },
+  { key: 'attendance',    label: 'Attendance' },
+  { key: 'classes',       label: 'Classes' },
+  { key: 'payments',      label: 'Payments' },
+  { key: 'payroll',       label: 'Payroll' },
+  { key: 'inventory',     label: 'Store & Inventory' },
+  { key: 'equipment',     label: 'Equipment' },
+  { key: 'branches',      label: 'Branches' },
+  { key: 'analytics',     label: 'Analytics' },
+  { key: 'import-export', label: 'Import & Export' },
+  { key: 'settings',      label: 'Settings' },
+]
+const DEFAULT_RECEPTIONIST_PERMISSIONS = ['dashboard', 'leads', 'members', 'attendance', 'classes', 'payments', 'inventory', 'equipment']
 
 const emptyPlanForm = { name: '', price: '', durationDays: '', description: '' }
 
@@ -20,10 +38,13 @@ export default function SettingsPage() {
   const [tab, setTab] = useState<'gym'|'plans'|'staff'>('gym')
   const [gymData, setGymData] = useState<GymSettings>({ name:'', address:'', phone:'', email:'', currency:'USD', timezone:'UTC' })
   const [staff, setStaff] = useState<StaffAccount[]>([])
+  const [branches, setBranches] = useState<Branch[]>([])
   const [saving, setSaving] = useState(false)
   const [showAddStaff, setShowAddStaff] = useState(false)
   const [showPw, setShowPw] = useState(false)
-  const [staffForm, setStaffForm] = useState({ name:'', email:'', password:'' })
+  const [staffForm, setStaffForm] = useState({ name:'', email:'', password:'', branchId:'', permissions: [...DEFAULT_RECEPTIONIST_PERMISSIONS] })
+  const [editingStaff, setEditingStaff] = useState<StaffAccount | null>(null)
+  const [editForm, setEditForm] = useState<{ branchId: string; permissions: string[] }>({ branchId: '', permissions: [] })
 
   const [plans, setPlans] = useState<Plan[]>([])
   const [showPlanForm, setShowPlanForm] = useState(false)
@@ -44,6 +65,7 @@ export default function SettingsPage() {
     loadPlans()
     if (isAdmin) {
       fetch('/api/staff-accounts').then(r => r.json()).then(d => { if (Array.isArray(d)) setStaff(d) }).catch(() => {})
+      fetch('/api/branches').then(r => r.json()).then(d => { if (Array.isArray(d.branches)) setBranches(d.branches) }).catch(() => {})
     }
   }, [isAdmin])
 
@@ -109,8 +131,30 @@ export default function SettingsPage() {
       toast.success(`Receptionist account created for ${staffForm.name}`)
       setStaff(prev => [data, ...prev])
       setShowAddStaff(false)
-      setStaffForm({ name:'', email:'', password:'' })
+      setStaffForm({ name:'', email:'', password:'', branchId:'', permissions: [...DEFAULT_RECEPTIONIST_PERMISSIONS] })
     } else toast.error(data.error || 'Failed')
+  }
+
+  function openEditStaff(s: StaffAccount) {
+    setEditingStaff(s)
+    setEditForm({
+      branchId: s.branchId || '',
+      permissions: s.permissions ? JSON.parse(s.permissions) : [...DEFAULT_RECEPTIONIST_PERMISSIONS],
+    })
+  }
+
+  async function saveStaffEdit() {
+    if (!editingStaff) return
+    const res = await fetch(`/api/staff-accounts?id=${editingStaff.id}`, {
+      method: 'PATCH', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ branchId: editForm.branchId || null, permissions: editForm.permissions }),
+    })
+    const data = await res.json()
+    if (res.ok) {
+      toast.success('Permissions updated!')
+      setStaff(prev => prev.map(s => s.id === editingStaff.id ? { ...s, branchId: data.branchId, permissions: data.permissions } : s))
+      setEditingStaff(null)
+    } else toast.error(data.error || 'Failed to update')
   }
 
   async function removeStaff(id: string, name: string) {
@@ -266,27 +310,37 @@ export default function SettingsPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {staff.map(s => (
-                <div key={s.id} className="card-hover flex items-center gap-4 group">
-                  <div className="w-10 h-10 rounded-full bg-blue-400/10 border border-blue-400/20 flex items-center justify-center font-bold text-blue-400 flex-shrink-0">
-                    {getInitials(s.name)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-white font-medium text-sm">{s.name}</span>
-                      <span className="text-xs bg-blue-400/10 text-blue-400 border border-blue-400/20 px-2 py-0.5 rounded-full">Receptionist</span>
+              {staff.map(s => {
+                const branchName = branches.find(b => b.id === s.branchId)?.name
+                const permCount = s.permissions ? JSON.parse(s.permissions).length : DEFAULT_RECEPTIONIST_PERMISSIONS.length
+                return (
+                  <div key={s.id} className="card-hover flex items-center gap-4 group">
+                    <div className="w-10 h-10 rounded-full bg-blue-400/10 border border-blue-400/20 flex items-center justify-center font-bold text-blue-400 flex-shrink-0">
+                      {getInitials(s.name)}
                     </div>
-                    <div className="text-dark-400 text-xs">{s.email}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-white font-medium text-sm">{s.name}</span>
+                        <span className="text-xs bg-blue-400/10 text-blue-400 border border-blue-400/20 px-2 py-0.5 rounded-full">Receptionist</span>
+                        <span className="text-xs bg-dark-700 text-dark-400 border border-dark-600 px-2 py-0.5 rounded-full">{branchName || 'All branches'}</span>
+                        <span className="text-xs text-dark-500">{permCount} permission{permCount !== 1 ? 's' : ''}</span>
+                      </div>
+                      <div className="text-dark-400 text-xs">{s.email}</div>
+                    </div>
+                    <div className="text-dark-600 text-xs flex-shrink-0 hidden sm:block">
+                      Added {new Date(s.createdAt).toLocaleDateString()}
+                    </div>
+                    <button onClick={() => openEditStaff(s)}
+                      className="opacity-0 group-hover:opacity-100 p-2 rounded-lg hover:bg-dark-700 hover:text-lime-400 text-dark-500 transition-all flex-shrink-0">
+                      <Pencil size={14}/>
+                    </button>
+                    <button onClick={() => removeStaff(s.id, s.name)}
+                      className="opacity-0 group-hover:opacity-100 p-2 rounded-lg hover:bg-red-500/10 hover:text-red-400 text-dark-600 transition-all flex-shrink-0">
+                      <Trash2 size={14}/>
+                    </button>
                   </div>
-                  <div className="text-dark-600 text-xs flex-shrink-0">
-                    Added {new Date(s.createdAt).toLocaleDateString()}
-                  </div>
-                  <button onClick={() => removeStaff(s.id, s.name)}
-                    className="opacity-0 group-hover:opacity-100 p-2 rounded-lg hover:bg-red-500/10 hover:text-red-400 text-dark-600 transition-all flex-shrink-0">
-                    <Trash2 size={14}/>
-                  </button>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
@@ -324,7 +378,7 @@ export default function SettingsPage() {
         {showAddStaff && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
             <motion.div initial={{scale:0.95,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.95,opacity:0}}
-              className="bg-dark-800 border border-dark-600 rounded-2xl p-8 w-full max-w-sm">
+              className="bg-dark-800 border border-dark-600 rounded-2xl p-8 w-full max-w-md max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="font-display text-xl tracking-wider text-white">ADD RECEPTIONIST</h2>
                 <button onClick={()=>setShowAddStaff(false)} className="p-2 rounded-lg hover:bg-dark-700 text-dark-400"><X size={18}/></button>
@@ -340,15 +394,84 @@ export default function SettingsPage() {
                     </button>
                   </div>
                 </div>
-                <div className="bg-blue-400/5 border border-blue-400/20 rounded-xl p-3 text-xs text-blue-300">
-                  This account will have receptionist access: Members, Classes, Attendance, Payments, Inventory, Equipment.
-                  Payroll, Branches, Analytics, Leads and Settings are hidden.
+
+                {branches.length > 0 && (
+                  <div><label className="label">Branch</label>
+                    <select value={staffForm.branchId} onChange={e=>setStaffForm(f=>({...f,branchId:e.target.value}))} className="input">
+                      <option value="">All branches</option>
+                      {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    </select>
+                    <p className="text-dark-500 text-[11px] mt-1">If set, this account only sees members, attendance, and payments for this branch.</p>
+                  </div>
+                )}
+
+                <div>
+                  <label className="label">Permissions</label>
+                  <div className="grid grid-cols-2 gap-1.5 bg-dark-700 border border-dark-600 rounded-xl p-3">
+                    {PERMISSION_OPTIONS.map(p => (
+                      <label key={p.key} className="flex items-center gap-2 text-xs text-dark-300 cursor-pointer">
+                        <input type="checkbox" checked={staffForm.permissions.includes(p.key)}
+                          onChange={e => setStaffForm(f => ({ ...f, permissions: e.target.checked ? [...f.permissions, p.key] : f.permissions.filter(k => k !== p.key) }))}
+                          className="w-3.5 h-3.5 accent-lime-400"/>
+                        {p.label}
+                      </label>
+                    ))}
+                  </div>
                 </div>
+
                 <div className="flex gap-3 pt-1">
                   <button type="button" onClick={()=>setShowAddStaff(false)} className="btn-ghost flex-1 justify-center">Cancel</button>
                   <button type="submit" className="btn-primary flex-1 justify-center">Create Account</button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Edit Staff Permissions Modal */}
+      <AnimatePresence>
+        {editingStaff && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+            <motion.div initial={{scale:0.95,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.95,opacity:0}}
+              className="bg-dark-800 border border-dark-600 rounded-2xl p-8 w-full max-w-md max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="font-display text-xl tracking-wider text-white">EDIT ACCESS</h2>
+                  <p className="text-dark-400 text-sm mt-0.5">{editingStaff.name}</p>
+                </div>
+                <button onClick={()=>setEditingStaff(null)} className="p-2 rounded-lg hover:bg-dark-700 text-dark-400"><X size={18}/></button>
+              </div>
+
+              <div className="space-y-4">
+                {branches.length > 0 && (
+                  <div><label className="label">Branch</label>
+                    <select value={editForm.branchId} onChange={e=>setEditForm(f=>({...f,branchId:e.target.value}))} className="input">
+                      <option value="">All branches</option>
+                      {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    </select>
+                  </div>
+                )}
+
+                <div>
+                  <label className="label">Permissions</label>
+                  <div className="grid grid-cols-2 gap-1.5 bg-dark-700 border border-dark-600 rounded-xl p-3">
+                    {PERMISSION_OPTIONS.map(p => (
+                      <label key={p.key} className="flex items-center gap-2 text-xs text-dark-300 cursor-pointer">
+                        <input type="checkbox" checked={editForm.permissions.includes(p.key)}
+                          onChange={e => setEditForm(f => ({ ...f, permissions: e.target.checked ? [...f.permissions, p.key] : f.permissions.filter(k => k !== p.key) }))}
+                          className="w-3.5 h-3.5 accent-lime-400"/>
+                        {p.label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-1">
+                  <button type="button" onClick={()=>setEditingStaff(null)} className="btn-ghost flex-1 justify-center">Cancel</button>
+                  <button onClick={saveStaffEdit} className="btn-primary flex-1 justify-center">Save Changes</button>
+                </div>
+              </div>
             </motion.div>
           </div>
         )}

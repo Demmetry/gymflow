@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { getSessionAndGym } from '@/lib/getGym'
+import { getSessionAndGym, branchScope } from '@/lib/getGym'
 
 const checkInSchema = z.object({
   memberId: z.coerce.number().int().min(1, 'memberId is required'),
@@ -42,6 +42,7 @@ export async function GET(req: NextRequest) {
     const where: any = {
       gymId: gym.id,
       membershipStatus: 'ACTIVE',
+      ...branchScope(result),
       ...(search ? {
         OR: [
           { firstName: { contains: search } },
@@ -86,7 +87,7 @@ export async function GET(req: NextRequest) {
     rangeEnd = new Date(rangeStart); rangeEnd.setDate(rangeEnd.getDate() + 1)
   }
 
-  const checkInWhere = { member: { gymId: gym.id }, checkedIn: { gte: rangeStart, lt: rangeEnd } }
+  const checkInWhere = { member: { gymId: gym.id, ...branchScope(result) }, checkedIn: { gte: rangeStart, lt: rangeEnd } }
   const totalCheckIns = await prisma.checkIn.count({ where: checkInWhere })
   const checkIns = await prisma.checkIn.findMany({
     where: checkInWhere,
@@ -103,26 +104,26 @@ export async function GET(req: NextRequest) {
   const weekAgo = new Date()
   weekAgo.setDate(weekAgo.getDate() - 7)
   const weeklyCheckIns = await prisma.checkIn.count({
-    where: { member: { gymId: gym.id }, checkedIn: { gte: weekAgo } },
+    where: { member: { gymId: gym.id, ...branchScope(result) }, checkedIn: { gte: weekAgo } },
   })
 
   // Inactive members (no check-in in 30 days)
   const thirtyDaysAgo = new Date()
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
   const recentlyActive = await prisma.checkIn.findMany({
-    where: { member: { gymId: gym.id }, checkedIn: { gte: thirtyDaysAgo } },
+    where: { member: { gymId: gym.id, ...branchScope(result) }, checkedIn: { gte: thirtyDaysAgo } },
     select: { memberId: true },
     distinct: ['memberId'],
   })
   const activeIds = recentlyActive.map(c => c.memberId)
   const inactiveCount = await prisma.member.count({
-    where: { gymId: gym.id, membershipStatus: 'ACTIVE', id: { notIn: activeIds } },
+    where: { gymId: gym.id, membershipStatus: 'ACTIVE', id: { notIn: activeIds }, ...branchScope(result) },
   })
 
   const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
   const todayEnd = new Date(todayStart); todayEnd.setDate(todayEnd.getDate() + 1)
   const todayCount = await prisma.checkIn.count({
-    where: { member: { gymId: gym.id }, checkedIn: { gte: todayStart, lt: todayEnd } },
+    where: { member: { gymId: gym.id, ...branchScope(result) }, checkedIn: { gte: todayStart, lt: todayEnd } },
   })
 
   return NextResponse.json({
@@ -142,7 +143,7 @@ export async function POST(req: NextRequest) {
   const { memberId, method = 'MANUAL' } = parsed.data
 
   // Verify member belongs to this gym
-  const member = await prisma.member.findFirst({ where: { id: memberId, gymId: gym.id } })
+  const member = await prisma.member.findFirst({ where: { id: memberId, gymId: gym.id, ...branchScope(result) } })
   if (!member) return NextResponse.json({ error: 'Member not found' }, { status: 404 })
   if (member.membershipStatus !== 'ACTIVE') return NextResponse.json({ error: 'Membership is not active' }, { status: 403 })
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { getSessionAndGym } from '@/lib/getGym'
+import { getSessionAndGym, branchScope } from '@/lib/getGym'
 
 function toDate(val: unknown): Date | null {
   if (!val || val === '') return null
@@ -18,8 +18,10 @@ const createClassSchema = z.object({
   color:       z.string().trim().max(20).optional(),
   location:    z.string().trim().max(100).optional().nullable(),
   trainerId:   z.string().optional().nullable(),
+  branchId:    z.string().optional().nullable(),
   startTime:   z.string().min(1, 'Start time is required'),
   endTime:     z.string().min(1, 'End time is required'),
+  isRecurring: z.boolean().optional(),
 })
 
 export async function GET() {
@@ -27,8 +29,14 @@ export async function GET() {
   if ('error' in result) return result.error
   const { gym } = result
   const classes = await prisma.gymClass.findMany({
-    where: { gymId: gym.id },
-    include: { trainer: true },
+    where: { gymId: gym.id, isActive: true, ...branchScope(result) },
+    select: {
+      id: true, name: true, description: true, category: true, duration: true,
+      capacity: true, color: true, location: true, isRecurring: true, recurrenceRule: true,
+      startTime: true, endTime: true,
+      trainer: { select: { id: true, firstName: true, lastName: true } },
+      _count: { select: { bookings: { where: { status: { in: ['CONFIRMED', 'ATTENDED'] } } } } },
+    },
     orderBy: { startTime: 'asc' },
   })
   return NextResponse.json(classes)
@@ -46,6 +54,10 @@ export async function POST(req: NextRequest) {
     const endTime   = toDate(body.endTime)
     if (!startTime) return NextResponse.json({ error: 'Valid start time is required' }, { status: 400 })
     if (!endTime)   return NextResponse.json({ error: 'Valid end time is required'   }, { status: 400 })
+
+    const DAY_NAMES = ['SUN','MON','TUE','WED','THU','FRI','SAT']
+    const recurrenceRule = body.isRecurring ? `WEEKLY:${DAY_NAMES[startTime.getDay()]}` : null
+
     const cls = await prisma.gymClass.create({
       data: {
         gymId:       gym.id,
@@ -57,6 +69,9 @@ export async function POST(req: NextRequest) {
         color:       body.color       || '#b5ff47',
         location:    body.location    || null,
         trainerId:   body.trainerId   || null,
+        branchId:    (result.branchId || body.branchId) || null,
+        isRecurring: body.isRecurring || false,
+        recurrenceRule,
         startTime,
         endTime,
       },
@@ -74,7 +89,7 @@ export async function DELETE(req: NextRequest) {
   const { gym } = result
   const id = new URL(req.url).searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'Class ID required' }, { status: 400 })
-  const cls = await prisma.gymClass.findFirst({ where: { id, gymId: gym.id } })
+  const cls = await prisma.gymClass.findFirst({ where: { id, gymId: gym.id, ...branchScope(result) } })
   if (!cls) return NextResponse.json({ error: 'Class not found' }, { status: 404 })
   await prisma.gymClass.delete({ where: { id } })
   return NextResponse.json({ success: true })
